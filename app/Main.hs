@@ -768,6 +768,22 @@ writePlasmaColorScheme = do
       shells "plasma-apply-colorscheme SolarizedDark" empty
       echo "Wrote and applied the SolarizedDark Plasma color scheme."
 
+-- | Qt/KDE apps' default font resolution (Dolphin, System Settings,
+-- etc. under a real Plasma session) rendered noticeably larger than
+-- wanted -- confirmed directly, fixed the same way as
+-- writeQt6ctConfig's [Fonts] section covers the Hyprland-session case.
+writePlasmaFont :: IO ()
+writePlasmaFont = do
+  (_, currentFont, _) <-
+    shellStrictWithErr "kreadconfig6 --file kdeglobals --group General --key font" empty
+  if strip currentFont == ""
+    then do
+      shells
+        "kwriteconfig6 --file kdeglobals --group General --key font \"Noto Sans,10,-1,5,50,0,0,0,0,0\""
+        empty
+      echo "Set kdeglobals' General font to Noto Sans, 10pt."
+    else echo "kdeglobals already has a General font set, leaving it untouched."
+
 -- | qt6ct is what gives Qt/KDE apps (Dolphin, etc.) a themed palette
 -- under Hyprland, where there's no Plasma shell to set one automatically
 -- the way there is under a real Plasma session -- QT_QPA_PLATFORMTHEME
@@ -805,6 +821,10 @@ writeQt6ctConfig = do
             <> "icon_theme=Papirus-Dark\n"
             <> "standard_dialogs=default\n"
             <> "style=Fusion\n"
+            <> "\n"
+            <> "[Fonts]\n"
+            <> "fixed=\"Hack,10,-1,5,50,0,0,0,0,0\"\n"
+            <> "general=\"Noto Sans,10,-1,5,50,0,0,0,0,0\"\n"
         )
       echo "Wrote ~/.config/qt6ct/qt6ct.conf (Solarized Dark, via the same SolarizedDark.colors file Plasma uses)."
 
@@ -1635,6 +1655,7 @@ main = do
   writeKxkbrcKeyRemaps
   writeSystemX11KeyboardOptions
   writePlasmaColorScheme
+  writePlasmaFont
   installQt6ct
   writeQt6ctConfig
   installPapirusIconTheme
