@@ -169,35 +169,6 @@ addDnfRepoFile repoFileUrl =
       ExitSuccess -> return ()
       ExitFailure _ -> die ("ERROR: Could not add repo file " <> repoFileUrl)
 
--- | Shared recipe for Wayland pieces (tofi, currently) that have no Fedora
--- package and build cleanly with a plain `meson setup build && ninja
--- -C build && sudo ninja -C build install`. Assumes build dependencies are
--- already installed.
-buildFromSourceViaMeson :: Turtle.FilePath -> Text -> Text -> Text -> Line -> IO ()
-buildFromSourceViaMeson binName repoUrl cloneDirName foundPrefix foundErrText =
-  which binName
-    >>= \case
-      Just loc -> echoWhichLocation loc foundPrefix foundErrText
-      Nothing ->
-        shells ("git clone " <> repoUrl <> " " <> cloneDirName) empty
-          >> cd (unpack cloneDirName)
-          >> shell "meson setup build" empty
-          >>= \case
-            ExitFailure _ ->
-              cd ".." >> die ("ERROR: Could not configure build for " <> cloneDirName)
-            ExitSuccess ->
-              shell "ninja -C build" empty
-                >>= \case
-                  ExitFailure _ ->
-                    cd ".." >> die ("ERROR: Could not build " <> cloneDirName)
-                  ExitSuccess ->
-                    shell "sudo ninja -C build install" empty
-                      >>= \case
-                        ExitFailure _ ->
-                          cd ".." >> die ("ERROR: Could not install " <> cloneDirName)
-                        ExitSuccess ->
-                          cd ".." >> rmtree (unpack cloneDirName)
-
 -- GHCup's bootstrap is distro-agnostic and already supports Fedora/aarch64
 -- directly, so this is unchanged from upstream. Note it needs a C compiler
 -- on PATH first (see the build-essential dnf install in `main` below) --
@@ -839,16 +810,20 @@ installK3d =
         >> chmod executable "./k3d"
         >> shells "sudo mv ./k3d /usr/local/bin/k3d" empty
 
--- | tofi has no Fedora package; build deps are installed alongside
--- waybar's in `main` (a plain meson/ninja build).
-installTofi :: IO ()
-installTofi =
-  buildFromSourceViaMeson
-    "tofi"
-    "https://github.com/philj56/tofi"
-    "tofi"
-    "tofi already installed at "
-    "tofi already installed."
+-- | Switched from tofi (built from source, no Fedora package) to fuzzel
+-- (a plain dnf package on Fedora 44 aarch64) -- fuzzel is the same
+-- lightweight, wlroots-native launcher lineage as tofi but with nicer
+-- default rendering (real icon-theme support, smoother fonts) and no
+-- meson/ninja build step needed. Unlike tofi, fuzzel already honors the
+-- active keyboard layout/remaps for its own shortcuts out of the box, so
+-- there's no equivalent to tofi's physical-keybindings gotcha here.
+installFuzzel :: IO ()
+installFuzzel =
+  dnfInstall
+    "fuzzel"
+    "fuzzel"
+    "fuzzel already installed at "
+    "fuzzel already installed."
 
 -- | Hyprland has no Fedora repo package at all (a licensing/policy gap
 -- historically, not a technical one), so this uses solopasha/hyprland,
@@ -954,7 +929,7 @@ writeHyprlandConfig = do
     else do
       mktree configDir
       cp (curdir </> "hypr/hyprland.conf") configPath
-      echo "Wrote ~/.config/hypr/hyprland.conf (master layout, xmonad-mapped keybinds, waybar, tofi launcher)."
+      echo "Wrote ~/.config/hypr/hyprland.conf (master layout, xmonad-mapped keybinds, waybar, fuzzel launcher)."
 
 -- | Unlike Hyprland, Waybar never writes anything into ~/.config on its
 -- own -- with no user config present it just falls back to reading
@@ -974,27 +949,6 @@ writeWaybarConfig = do
       cp (curdir </> "waybar/config.jsonc") (configDir </> "config.jsonc")
       cp (curdir </> "waybar/style.css") (configDir </> "style.css")
       echo "Wrote ~/.config/waybar/{config.jsonc,style.css} (hyprland/* modules, slim bar)."
-
--- | tofi's `physical-keybindings` defaults to true, meaning it matches
--- its own internal shortcuts (Escape to close, etc.) against the
--- physical key position regardless of the active keyboard
--- layout/remap. Under hypr/hyprland.conf's caps:swapescape kb_option,
--- that means the physical Caps Lock key still behaves like Caps Lock
--- inside tofi even though every other Wayland client correctly sees it
--- as Escape -- confirmed directly on this machine. false makes tofi
--- honor the active layout like everything else does.
-writeTofiConfig :: IO ()
-writeTofiConfig = do
-  curdir <- pwd
-  homeDir <- home
-  let configDir = homeDir </> ".config/tofi"
-  alreadyExists <- testfile (configDir </> "config")
-  if alreadyExists
-    then echo "~/.config/tofi/config already present, leaving it untouched."
-    else do
-      mktree configDir
-      cp (curdir </> "tofi/config") (configDir </> "config")
-      echo "Wrote ~/.config/tofi/config (physical-keybindings=false, so tofi honors the caps:swapescape remap)."
 
 -- | Fedora's own `emacs` package already builds with
 -- --with-native-compilation=aot (confirmed by reading emacs.spec out of
@@ -1555,17 +1509,12 @@ main = do
   installKind
   installK3d
   installTerraform
-  -- tofi's build deps, plus waybar and brightnessctl for the Hyprland
-  -- session below (brightnessctl specifically because hypr/hyprland.conf's
-  -- brightness keys need it -- xmonad.hs's `xbacklight` doesn't work under
-  -- a native Wayland compositor).
-  shells
-    "sudo dnf install -y meson ninja-build wayland-devel \
-    \wayland-protocols-devel scdoc freetype-devel cairo-devel \
-    \pango-devel libxkbcommon-devel harfbuzz-devel waybar brightnessctl"
-    empty
-  installTofi
-  writeTofiConfig
+  -- waybar and brightnessctl for the Hyprland session below
+  -- (brightnessctl specifically because hypr/hyprland.conf's brightness
+  -- keys need it -- xmonad.hs's `xbacklight` doesn't work under a
+  -- native Wayland compositor).
+  shells "sudo dnf install -y waybar brightnessctl" empty
+  installFuzzel
   installHyprland
   writeWaybarConfig
   -- river, just as a curiosity for future window-manager experiments
