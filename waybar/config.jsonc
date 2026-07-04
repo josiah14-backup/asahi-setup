@@ -9,11 +9,23 @@
 // hyprland/workspaces, hyprland/window, hyprland/language equivalents
 // built in, used below instead.
 //
-// power-profiles-daemon and temperature/cpu/memory are left out of the
-// fallback config's module list on purpose: power-profiles-daemon is
-// inactive on this machine (`systemctl is-active` confirmed), and Apple
-// Silicon's thermal sensors don't live at the hwmon paths the stock
-// temperature module expects.
+// temperature/cpu/memory are left out of the fallback config's module
+// list on purpose: Apple Silicon's thermal sensors don't live at the
+// hwmon paths the stock temperature module expects.
+//
+// power-profiles-daemon *was* left out for the same reason initially --
+// `systemctl is-active power-profiles-daemon` reported inactive -- but
+// that was checking the wrong unit. This machine uses `tuned` (not
+// power-profiles-daemon) for power management, bridged to the same
+// net.hadess.PowerProfiles D-Bus API Waybar's module and Plasma's own
+// battery widget both talk to via the separate `tuned-ppd` service,
+// which *is* active (confirmed via `gdbus call --system --dest
+// net.hadess.PowerProfiles ...`, which returned real profile data driven
+// by tuned). Installing the actual power-profiles-daemon package instead
+// would conflict with tuned-ppd over that same D-Bus name (same kind of
+// conflict Main.hs's own tlp/tuned comment already documents for
+// systemd service files) -- tuned-ppd already covers this, so nothing
+// extra needs installing.
 {
     "height": 24,
     "spacing": 4,
@@ -25,6 +37,7 @@
         "backlight",
         "pulseaudio",
         "network",
+        "power-profiles-daemon",
         "battery",
         "clock",
         "tray"
@@ -62,6 +75,18 @@
         "format-wifi": "{essid} ({signalStrength}%) ",
         "format-ethernet": "{ipaddr}/{cidr} ",
         "format-disconnected": "Disconnected ⚠"
+    },
+
+    "power-profiles-daemon": {
+        "format": "{icon}",
+        "tooltip-format": "Power profile: {profile}\nDriver: {driver}",
+        "tooltip": true,
+        "format-icons": {
+            "default": "",
+            "performance": "",
+            "balanced": "",
+            "power-saver": ""
+        }
     },
 
     "battery": {

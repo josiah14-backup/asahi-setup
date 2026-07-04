@@ -892,7 +892,13 @@ installHyprland =
           "Hyprland already installed."
       Nothing -> do
         shells "sudo dnf copr enable -y solopasha/hyprland" empty
-        shell "sudo dnf install -y hyprland xdg-desktop-portal-hyprland" empty
+        -- hyprland-qtutils provides Qt-based helper dialogs Hyprland
+        -- itself uses (e.g. its own update-available notification).
+        -- Without it, Hyprland shows a startup toast warning it's
+        -- missing (confirmed directly: seen on this machine before this
+        -- was added) -- harmless, but the warning's easy to mistake for
+        -- something more serious.
+        shell "sudo dnf install -y hyprland xdg-desktop-portal-hyprland hyprland-qtutils" empty
           >>= \case
             ExitSuccess -> return ()
             ExitFailure _ -> rebuildAquamarineThenInstallHyprland
@@ -924,7 +930,7 @@ rebuildAquamarineThenInstallHyprland = do
     "sudo dnf install -y \
     \$HOME/rpmbuild/RPMS/aarch64/aquamarine-[0-9]*.rpm \
     \$HOME/rpmbuild/RPMS/aarch64/aquamarine-devel-[0-9]*.rpm \
-    \hyprland xdg-desktop-portal-hyprland"
+    \hyprland xdg-desktop-portal-hyprland hyprland-qtutils"
     empty
 
 writeHyprlandConfig :: IO ()

@@ -53,6 +53,7 @@ button {
 #backlight,
 #pulseaudio,
 #network,
+#power-profiles-daemon,
 #battery,
 #clock,
 #tray {
@@ -70,6 +71,7 @@ button {
 #backlight,
 #pulseaudio,
 #network,
+#power-profiles-daemon,
 #battery {
     font-weight: 900;
 }
