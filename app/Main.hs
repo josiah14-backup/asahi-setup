@@ -102,7 +102,7 @@ module Main where
 
 import qualified Data.Foldable as F (fold)
 import Data.Maybe (fromMaybe)
-import Data.Text (isInfixOf, pack, strip, unpack)
+import Data.Text (isInfixOf, pack, replace, strip, unpack)
 import Turtle
 import Turtle.Format (format, fp)
 import Turtle.Line (textToLine, textToLines)
@@ -423,6 +423,59 @@ copyDotFilesToHome = do
   cp (curdir </> ".zprofile") (homedir </> ".zprofile")
   cp (curdir </> ".tmux.conf") (homedir </> ".tmux.conf")
   cp (curdir </> ".gitconfig") (homedir </> ".gitconfig")
+
+-- | Firefox, Elisa, Kamoso, and NeoChat are each installed twice on this
+-- machine -- once as a system package, once via the flatpakInstall list
+-- below, both inherited independently from pop-os-setup rather than a
+-- deliberate choice for this machine -- and both installs ship a
+-- .desktop file under the identical ID (e.g.
+-- org.mozilla.firefox.desktop). Since ~/.local/share/flatpak/exports's
+-- applications dir sits earlier in XDG_DATA_DIRS than /usr/share, the
+-- Flatpak entry silently shadows the system one in any
+-- XDG_DATA_DIRS-respecting launcher (confirmed with tofi-drun: only the
+-- Flatpak Firefox ever showed up). Rather than drop either install,
+-- this copies each system .desktop file under a distinct filename/ID
+-- with "(System)" appended to its Name, so both show up as separate,
+-- clearly-labelled launcher entries.
+writeDisambiguatedSystemDesktopFiles :: IO ()
+writeDisambiguatedSystemDesktopFiles = do
+  homedir <- home
+  let appsDir = homedir </> ".local/share/applications"
+  mktree appsDir
+  mapM_
+    (disambiguateSystemDesktopFile appsDir)
+    [ ("org.mozilla.firefox", "Firefox")
+    , ("org.kde.elisa", "Elisa")
+    , ("org.kde.kamoso", "Kamoso")
+    , ("org.kde.neochat", "NeoChat")
+    ]
+
+disambiguateSystemDesktopFile :: Turtle.FilePath -> (Text, Text) -> IO ()
+disambiguateSystemDesktopFile appsDir (appId, displayName) = do
+  let srcPath = "/usr/share/applications/" <> appId <> ".desktop"
+      destFileName = replace "." "-" appId <> "-system.desktop"
+  srcExists <- testfile (fromText srcPath)
+  if not srcExists
+    then echoText (appId <> " not installed as a system package, skipping desktop-file override.")
+    else do
+      shells
+        ( "cp "
+            <> srcPath
+            <> " "
+            <> format fp (appsDir </> fromText destFileName)
+        )
+        empty
+      shells
+        ( "sed -i '0,/^Name="
+            <> displayName
+            <> "$/{s/^Name="
+            <> displayName
+            <> "$/Name="
+            <> displayName
+            <> " (System)/}' "
+            <> format fp (appsDir </> fromText destFileName)
+        )
+        empty
 
 -- | Fedora doesn't auto-start/enable docker.service or add you to the
 -- docker group the way Debian's postinst scripts do, so both are done
@@ -1510,6 +1563,7 @@ main = do
         >> flatpakInstall "org.telegram.desktop"
         >> flatpakInstall "com.github.xournalpp.xournalpp"
     ExitFailure _ -> die "Could not add the remote 'flathub'."
+  writeDisambiguatedSystemDesktopFiles
   -- No aarch64 Flathub build exists for these two, unlike everything
   -- above, so they come from Fedora's own repos instead.
   dnfInstall
