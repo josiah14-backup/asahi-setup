@@ -1,5 +1,10 @@
 /* Slimmer than Waybar's stock style.css (13px font, 10px module padding) --
-   matched to this config's smaller 24px bar height. */
+   matched to this config's smaller bar height. Note: an 11px font needs
+   roughly 17px of vertical space for its own glyphs (ascenders/descenders
+   plus Pango/GTK's own line-height), so config.jsonc's "height" can be
+   set lower than that, but the bar won't actually render any shorter --
+   confirmed directly (height: 16 still rendered at ~17px). Shrink
+   font-size here too if a shorter bar is ever wanted. */
 
 * {
     font-family: 'Noto Sans Mono', 'Font Awesome 6 Free', 'Font Awesome 6 Brands', monospace;

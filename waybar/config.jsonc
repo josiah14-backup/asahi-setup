@@ -27,7 +27,7 @@
 // systemd service files) -- tuned-ppd already covers this, so nothing
 // extra needs installing.
 {
-    "height": 24,
+    "height": 16,
     "spacing": 4,
 
     "modules-left": ["hyprland/workspaces"],
