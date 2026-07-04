@@ -60,6 +60,7 @@
     // the only one of the four actually available, since it's computed
     // from /proc/stat rather than needing a hardware sensor.
     "cpu": {
+        "interval": 1,
         "format": "{usage}% ",
         "tooltip": false
     },
