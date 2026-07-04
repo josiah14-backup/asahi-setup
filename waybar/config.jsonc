@@ -39,6 +39,7 @@
     "modules-right": [
         "idle_inhibitor",
         "custom/bluetooth",
+        "custom/mic",
         "backlight",
         "pulseaudio",
         "network",
@@ -97,6 +98,22 @@
         "signal": 9,
         "on-click": "~/.config/hypr/scripts/bluetooth-status.sh toggle",
         "on-click-right": "~/.config/hypr/scripts/bluetooth-status.sh pair",
+        "tooltip": true
+    },
+
+    // waybar's own pulseaudio module can't show which mic is default or
+    // scope a click to just the source: its {desc}/{volume}/{icon}/
+    // on-click/scroll all target the default *sink* (speaker); the
+    // source-related fields (format-source/format-source-muted) are
+    // only embeddable as text inside the sink module's own label, with
+    // no device-name placeholder of their own -- confirmed via `man
+    // waybar-pulseaudio`. This custom module covers the mic instead.
+    "custom/mic": {
+        "exec": "~/.config/hypr/scripts/mic-status.sh",
+        "return-type": "json",
+        "interval": 5,
+        "signal": 10,
+        "on-click": "~/.config/hypr/scripts/mic-status.sh toggle",
         "tooltip": true
     },
 

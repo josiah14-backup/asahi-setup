@@ -77,6 +77,7 @@ button {
 #tray,
 #custom-layout,
 #custom-bluetooth,
+#custom-mic,
 #cpu {
     padding: 0 6px;
     color: #839496;
@@ -107,6 +108,20 @@ button {
     background-color: #859900;
 }
 
+/* microphone/microphone-slash (U+F130/U+F131) are Font Awesome 6 Free
+   Solid glyphs, so unlike bluetooth-b above this one IS in the
+   font-weight: 900 rule below. */
+#custom-mic {
+    background-color: #6c71c4;
+    color: #002b36;
+    margin: 0 2px;
+}
+
+#custom-mic.muted {
+    background-color: #dc322f;
+    color: #fdf6e3;
+}
+
 #cpu {
     background-color: #2aa198;
     color: #002b36;
@@ -125,6 +140,7 @@ button {
 #network,
 #power-profiles-daemon,
 #battery,
+#custom-mic,
 #cpu {
     font-weight: 900;
 }
