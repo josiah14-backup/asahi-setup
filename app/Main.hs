@@ -748,6 +748,119 @@ writeSystemX11KeyboardOptions = do
         empty
       echo "Set system-wide X11 keyboard options (caps:swapescape, ctrl:ralt_rctrl) via localectl -- log out/in for KWin to pick it up (a live reconfigure signal isn't enough)."
 
+-- | Solarized Dark KDE color scheme, applied via `plasma-apply-colorscheme`
+-- (a real Plasma tool, no sudo needed) for the Plasma session, and
+-- pointed at by qt6ct's own config (below) for the Hyprland session,
+-- since qt6ct natively understands the same KDE .colors format --
+-- avoiding maintaining two separate palettes for the two sessions.
+writePlasmaColorScheme :: IO ()
+writePlasmaColorScheme = do
+  curdir <- pwd
+  homeDir <- home
+  let schemesDir = homeDir </> ".local/share/color-schemes"
+      schemePath = schemesDir </> "SolarizedDark.colors"
+  alreadyExists <- testfile schemePath
+  if alreadyExists
+    then echo "~/.local/share/color-schemes/SolarizedDark.colors already present, leaving it untouched."
+    else do
+      mktree schemesDir
+      cp (curdir </> "plasma/SolarizedDark.colors") schemePath
+      shells "plasma-apply-colorscheme SolarizedDark" empty
+      echo "Wrote and applied the SolarizedDark Plasma color scheme."
+
+-- | qt6ct is what gives Qt/KDE apps (Dolphin, etc.) a themed palette
+-- under Hyprland, where there's no Plasma shell to set one automatically
+-- the way there is under a real Plasma session -- QT_QPA_PLATFORMTHEME
+-- (set in hypr/hyprland.conf's env block) is what tells Qt apps to ask
+-- qt6ct at all. color_scheme_path points at the same .colors file
+-- writePlasmaColorScheme deploys, since qt6ct can load KDE's own color
+-- scheme format directly -- no need for a second, qt6ct-specific palette.
+installQt6ct :: IO ()
+installQt6ct =
+  dnfInstall
+    "qt6ct"
+    "qt6ct"
+    "qt6ct already installed at "
+    "qt6ct already installed."
+
+writeQt6ctConfig :: IO ()
+writeQt6ctConfig = do
+  homeDir <- home
+  let configDir = homeDir </> ".config/qt6ct"
+      configPath = configDir </> "qt6ct.conf"
+      schemePath = homeDir </> ".local/share/color-schemes/SolarizedDark.colors"
+  alreadyExists <- testfile configPath
+  if alreadyExists
+    then echo "~/.config/qt6ct/qt6ct.conf already present, leaving it untouched."
+    else do
+      mktree configDir
+      schemePathText <- either (const (die "Could not decode home directory path as UTF-8")) return (toText schemePath)
+      writeTextFile
+        configPath
+        ( "[Appearance]\n"
+            <> "color_scheme_path="
+            <> schemePathText
+            <> "\n"
+            <> "custom_palette=true\n"
+            <> "icon_theme=Papirus-Dark\n"
+            <> "standard_dialogs=default\n"
+            <> "style=Fusion\n"
+        )
+      echo "Wrote ~/.config/qt6ct/qt6ct.conf (Solarized Dark, via the same SolarizedDark.colors file Plasma uses)."
+
+-- | Breeze's default folder icons are blue, which clashes visually next
+-- to Solarized's own orange accent used everywhere else (hyprland.conf
+-- borders, waybar, fuzzel). papirus-icon-theme-dark is a pure data/icon
+-- package with no binary of its own, so this calls dnf directly rather
+-- than force-fitting the dnfInstall helper's which-based "is it already
+-- installed" check onto a package that has nothing to `which`.
+installPapirusIconTheme :: IO ()
+installPapirusIconTheme =
+  shells "sudo dnf install -y papirus-icon-theme-dark" empty
+
+-- | papirus-folders (the tool that recolors Papirus's folder icons) has
+-- no Fedora package -- fetched directly from its own GitHub repo and
+-- installed to /usr/local/bin, same pattern as kompose/kind/k3d above,
+-- so it stays available later if the color ever needs changing again.
+installPapirusFolders :: IO ()
+installPapirusFolders =
+  which "papirus-folders"
+    >>= \case
+      Just loc ->
+        echoWhichLocation
+          loc
+          "papirus-folders already installed at "
+          "papirus-folders already installed."
+      Nothing ->
+        shells
+          "curl -fsSL https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-folders/master/papirus-folders -o papirus-folders"
+          empty
+          >> chmod executable "./papirus-folders"
+          >> shells "sudo mv ./papirus-folders /usr/local/bin/papirus-folders" empty
+
+-- | Sets Papirus-Dark's folder color to orange (Solarized's own accent)
+-- and makes Papirus-Dark the active icon theme for Qt/KDE apps
+-- (kdeglobals, read by a real Plasma session) -- qt6ct's own icon_theme
+-- setting (written by writeQt6ctConfig above) covers the Hyprland
+-- session, which has no Plasma shell to read kdeglobals from
+-- automatically. papirus-folders re-execs itself via sudo internally
+-- when it needs to modify the system-wide /usr/share/icons/Papirus-Dark
+-- directory, so this doesn't need its own separate privilege escalation
+-- for that step.
+applyPapirusDarkOrangeTheme :: IO ()
+applyPapirusDarkOrangeTheme = do
+  (exitCode, currentTarget, _) <-
+    shellStrictWithErr "readlink /usr/share/icons/Papirus-Dark/64x64/places/folder.svg" empty
+  let alreadyOrange =
+        exitCode == ExitSuccess && isInfixOf (pack "folder-orange") (strip currentTarget)
+  if alreadyOrange
+    then echo "Papirus-Dark folder color already set to orange."
+    else do
+      shells "sudo papirus-folders -C orange -t Papirus-Dark -u" empty
+      echo "Set Papirus-Dark's folder color to orange."
+  shells "kwriteconfig6 --file kdeglobals --group Icons --key Theme Papirus-Dark" empty
+  echo "Set Papirus-Dark as the active Plasma icon theme."
+
 -- | No Fedora package exists; kompose's GitHub releases publish an
 -- aarch64 binary directly (`kompose-linux-arm64`), unlike the amd64 one
 -- upstream's own script used.
@@ -1493,6 +1606,12 @@ main = do
   installTmuxPluginManager
   writeKxkbrcKeyRemaps
   writeSystemX11KeyboardOptions
+  writePlasmaColorScheme
+  installQt6ct
+  writeQt6ctConfig
+  installPapirusIconTheme
+  installPapirusFolders
+  applyPapirusDarkOrangeTheme
   nixInstalled <- which "nix-shell"
   case nixInstalled of
     Just nixShellLoc ->
