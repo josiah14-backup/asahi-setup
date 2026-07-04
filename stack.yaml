@@ -1,0 +1,12 @@
+# This file was authored by hand for the asahi-setup project.
+#
+# For advanced use and comprehensive documentation of the format, please see:
+# https://docs.haskellstack.org/en/stable/yaml_configuration/
+
+# lts-24.47 ships GHC 9.10.3, which matches the `ghc` package dnf installs
+# on Fedora 44 (Asahi Remix), and already includes turtle-1.6.2 in-snapshot
+# (no extra-deps override needed, unlike older resolvers).
+resolver: lts-24.47
+
+packages:
+- .

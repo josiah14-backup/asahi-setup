@@ -1,0 +1,42 @@
+name:                asahi-setup
+version:             0.1.0.0
+github:              "josiah14/asahi-setup"
+license:             BSD3
+author:              "Josiah Berkebile"
+maintainer:          "praenato14@gmail.com"
+copyright:           "2026 Cloyd Garrett 'Josiah' Berkebile"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+description:         Please see the README on GitHub at <https://github.com/githubuser/asahi-setup#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- text
+- turtle >= 1.5.0 && < 2
+
+library: {}
+
+executables:
+  asahi-setup-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - asahi-setup
+
+tests:
+  asahi-setup-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - asahi-setup

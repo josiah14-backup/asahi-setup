@@ -1,0 +1,18 @@
+[Unit]
+Description=librespot (Spotify Connect receiver)
+Documentation=https://github.com/librespot-org/librespot
+Wants=sound.target
+After=sound.target
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# Runs in credential-free "zeroconf" discovery mode: pick "Librespot (Asahi)"
+# from the device list in Spotify's own app (phone/web/desktop) elsewhere to
+# connect, rather than storing a Spotify password here.
+ExecStart=%h/.cargo/bin/librespot --name "Librespot (Asahi)" --backend alsa --bitrate 320 --enable-volume-normalisation --initial-volume 75 --cache %h/.cache/librespot
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

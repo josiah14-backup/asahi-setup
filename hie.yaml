@@ -1,0 +1,4 @@
+cradle:
+  stack:
+    - path: "./"
+      component: "asahi-setup:exe:asahi-setup-exe"
