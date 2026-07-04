@@ -180,8 +180,18 @@ fi
 export PATH="/home/josiah/.rd/bin:$PATH"
 ### MANAGED BY RANCHER DESKTOP END (DO NOT EDIT)
 
-if [ -z "$SSH_AUTH_SOCK" ]; then
-  eval "$(ssh-agent -s)"
+# Checking $SSH_AUTH_SOCK alone respawns a new ssh-agent in every tmux
+# pane: panes are spawned fresh by the tmux server, not as children of
+# whatever pane last exported it, so each new pane sees it unset. Cache
+# the agent's env in a file and only start a new one if the cached PID
+# isn't actually a live ssh-agent process, so every shell/pane reuses the
+# same agent instead.
+SSH_ENV="$HOME/.ssh/agent-environment"
+[ -f "$SSH_ENV" ] && . "$SSH_ENV" > /dev/null
+if [ -z "$SSH_AGENT_PID" ] || ! ps -p "$SSH_AGENT_PID" -o comm= 2>/dev/null | grep -q '^ssh-agent$'; then
+  ssh-agent -s | sed '/^echo /d' > "$SSH_ENV"
+  chmod 600 "$SSH_ENV"
+  . "$SSH_ENV" > /dev/null
 fi
 
 [ -f "/home/josiah/.ghcup/env" ] && . "/home/josiah/.ghcup/env" # ghcup-env
