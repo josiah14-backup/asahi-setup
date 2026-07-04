@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Spotify Player
+Comment=TUI Spotify client (local browsing/search, Connect-device control)
+Exec=konsole -e spotify_player
+Terminal=false
+Type=Application
+Icon=utilities-terminal
+Categories=Audio;Music;Player;
