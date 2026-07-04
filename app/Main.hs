@@ -975,6 +975,27 @@ writeWaybarConfig = do
       cp (curdir </> "waybar/style.css") (configDir </> "style.css")
       echo "Wrote ~/.config/waybar/{config.jsonc,style.css} (hyprland/* modules, slim bar)."
 
+-- | tofi's `physical-keybindings` defaults to true, meaning it matches
+-- its own internal shortcuts (Escape to close, etc.) against the
+-- physical key position regardless of the active keyboard
+-- layout/remap. Under hypr/hyprland.conf's caps:swapescape kb_option,
+-- that means the physical Caps Lock key still behaves like Caps Lock
+-- inside tofi even though every other Wayland client correctly sees it
+-- as Escape -- confirmed directly on this machine. false makes tofi
+-- honor the active layout like everything else does.
+writeTofiConfig :: IO ()
+writeTofiConfig = do
+  curdir <- pwd
+  homeDir <- home
+  let configDir = homeDir </> ".config/tofi"
+  alreadyExists <- testfile (configDir </> "config")
+  if alreadyExists
+    then echo "~/.config/tofi/config already present, leaving it untouched."
+    else do
+      mktree configDir
+      cp (curdir </> "tofi/config") (configDir </> "config")
+      echo "Wrote ~/.config/tofi/config (physical-keybindings=false, so tofi honors the caps:swapescape remap)."
+
 -- | Fedora's own `emacs` package already builds with
 -- --with-native-compilation=aot (confirmed by reading emacs.spec out of
 -- the fc44 SRPM), so a plain dnf install doesn't actually get you
@@ -1544,6 +1565,7 @@ main = do
     \pango-devel libxkbcommon-devel harfbuzz-devel waybar brightnessctl"
     empty
   installTofi
+  writeTofiConfig
   installHyprland
   writeWaybarConfig
   -- river, just as a curiosity for future window-manager experiments
