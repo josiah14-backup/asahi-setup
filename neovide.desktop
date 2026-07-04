@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Neovide
+Comment=Native GUI for Neovim
+Exec=neovide
+Terminal=false
+Type=Application
+Icon=nvim
+Categories=Utility;TextEditor;Development;

@@ -727,6 +727,26 @@ installNeovide = do
           "Neovide already installed."
       Nothing ->
         shells "$HOME/.cargo/bin/cargo install neovide --locked" empty
+  writeNeovideDesktopFile
+
+-- | Neovide has no .desktop file of its own, same gap spotify_player
+-- and vifm had -- unlike those two (TUIs needing a terminal wrapper),
+-- Neovide is a real GUI app, so this launches it directly. Icon=nvim
+-- resolves via hicolor's plain nvim.png (which Papirus-Dark inherits
+-- from), confirmed directly rather than assumed.
+writeNeovideDesktopFile :: IO ()
+writeNeovideDesktopFile = do
+  curdir <- pwd
+  homeDir <- home
+  let appsDir = homeDir </> ".local/share/applications"
+      desktopPath = appsDir </> "neovide.desktop"
+  alreadyExists <- testfile desktopPath
+  if alreadyExists
+    then echo "~/.local/share/applications/neovide.desktop already present, leaving it untouched."
+    else do
+      mktree appsDir
+      cp (curdir </> "neovide.desktop") desktopPath
+      echo "Wrote ~/.local/share/applications/neovide.desktop so Neovide shows up in the launcher."
 
 writeLibrespotSystemdService :: IO ()
 writeLibrespotSystemdService = do
