@@ -825,6 +825,23 @@ installFuzzel =
     "fuzzel already installed at "
     "fuzzel already installed."
 
+-- | fuzzel's own defaults are already Solarized Light; fuzzel/fuzzel.ini
+-- is the Solarized Dark equivalent (Solarized's own documented
+-- light/dark role swap of the same accent colors). See that file's own
+-- header comment for the exact mapping.
+writeFuzzelConfig :: IO ()
+writeFuzzelConfig = do
+  curdir <- pwd
+  homeDir <- home
+  let configDir = homeDir </> ".config/fuzzel"
+  alreadyExists <- testfile (configDir </> "fuzzel.ini")
+  if alreadyExists
+    then echo "~/.config/fuzzel/fuzzel.ini already present, leaving it untouched."
+    else do
+      mktree configDir
+      cp (curdir </> "fuzzel/fuzzel.ini") (configDir </> "fuzzel.ini")
+      echo "Wrote ~/.config/fuzzel/fuzzel.ini (Solarized Dark)."
+
 -- | Hyprland has no Fedora repo package at all (a licensing/policy gap
 -- historically, not a technical one), so this uses solopasha/hyprland,
 -- a COPR verified to (a) actually exist, (b) explicitly support
@@ -1515,6 +1532,7 @@ main = do
   -- native Wayland compositor).
   shells "sudo dnf install -y waybar brightnessctl" empty
   installFuzzel
+  writeFuzzelConfig
   installHyprland
   writeWaybarConfig
   -- river, just as a curiosity for future window-manager experiments

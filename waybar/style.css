@@ -1,4 +1,16 @@
-/* Slimmer than Waybar's stock style.css (13px font, 10px module padding) --
+/* Solarized Dark.
+   base03 #002b36  background
+   base02 #073642  background highlights / neutral module bg
+   base01 #586e75  secondary content / muted bg (idle_inhibitor off, muted)
+   base00 #657b83  (light-mode body text -- unused here)
+   base0  #839496  body text (dark mode)
+   base1  #93a1a1  emphasized text (dark mode)
+   base2  #eee8d5  (light-mode bg highlight -- unused here)
+   base3  #fdf6e3  (light-mode bg -- unused here)
+   yellow #b58900  orange #cb4b16  red #dc322f  magenta #d33682
+   violet #6c71c4  blue   #268bd2  cyan   #2aa198  green  #859900
+
+   Slimmer than Waybar's stock style.css (13px font, 10px module padding) --
    matched to this config's smaller bar height. Note: an 11px font needs
    roughly 17px of vertical space for its own glyphs (ascenders/descenders
    plus Pango/GTK's own line-height), so config.jsonc's "height" can be
@@ -12,8 +24,8 @@
 }
 
 window#waybar {
-    background-color: rgba(43, 48, 59, 0.5);
-    color: #ffffff;
+    background-color: rgba(0, 43, 54, 0.85);
+    color: #839496;
 }
 
 button {
@@ -25,20 +37,21 @@ button {
 #workspaces button {
     padding: 0 4px;
     background-color: transparent;
-    color: #ffffff;
+    color: #839496;
 }
 
 #workspaces button:hover {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(7, 54, 66, 0.8);
 }
 
 #workspaces button.focused, #workspaces button.active {
-    background-color: #64727d;
-    box-shadow: inset 0 -2px #ffffff;
+    background-color: #073642;
+    box-shadow: inset 0 -2px #268bd2;
 }
 
 #workspaces button.urgent {
-    background-color: #eb4d4b;
+    background-color: #dc322f;
+    color: #fdf6e3;
 }
 
 #window,
@@ -63,7 +76,7 @@ button {
 #clock,
 #tray {
     padding: 0 6px;
-    color: #ffffff;
+    color: #839496;
 }
 
 /* Font Awesome 6 ships Solid and Regular as separate font files under
@@ -82,29 +95,30 @@ button {
 }
 
 #clock {
-    background-color: #64727d;
+    background-color: #268bd2;
+    color: #002b36;
 }
 
 #battery {
-    background-color: #ffffff;
-    color: #000000;
+    background-color: #073642;
+    color: #839496;
 }
 
 #battery.charging, #battery.plugged {
-    color: #ffffff;
-    background-color: #26a65b;
+    color: #002b36;
+    background-color: #859900;
 }
 
 @keyframes blink {
     to {
-        background-color: #ffffff;
-        color: #000000;
+        background-color: #b58900;
+        color: #002b36;
     }
 }
 
 #battery.critical:not(.charging) {
-    background-color: #f53c3c;
-    color: #ffffff;
+    background-color: #dc322f;
+    color: #fdf6e3;
     animation-name: blink;
     animation-duration: 0.5s;
     animation-timing-function: steps(12);
@@ -112,30 +126,38 @@ button {
     animation-direction: alternate;
 }
 
+#power-profiles-daemon {
+    background-color: #cb4b16;
+    color: #002b36;
+}
+
 #backlight {
-    background-color: #90b1b1;
+    background-color: #b58900;
+    color: #002b36;
 }
 
 #network {
-    background-color: #2980b9;
+    background-color: #2aa198;
+    color: #002b36;
 }
 
 #network.disconnected {
-    background-color: #f53c3c;
+    background-color: #dc322f;
+    color: #fdf6e3;
 }
 
 #pulseaudio {
-    background-color: #f1c40f;
-    color: #000000;
+    background-color: #6c71c4;
+    color: #002b36;
 }
 
 #pulseaudio.muted {
-    background-color: #90b1b1;
-    color: #2a5c45;
+    background-color: #586e75;
+    color: #073642;
 }
 
 #tray {
-    background-color: #2980b9;
+    background-color: #073642;
 }
 
 #tray > .passive {
@@ -144,14 +166,15 @@ button {
 
 #tray > .needs-attention {
     -gtk-icon-effect: highlight;
-    background-color: #eb4d4b;
+    background-color: #dc322f;
 }
 
 #idle_inhibitor {
-    background-color: #2d3436;
+    background-color: #586e75;
+    color: #073642;
 }
 
 #idle_inhibitor.activated {
-    background-color: #ecf0f1;
-    color: #2d3436;
+    background-color: #b58900;
+    color: #002b36;
 }
