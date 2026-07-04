@@ -861,6 +861,34 @@ applyPapirusDarkOrangeTheme = do
   shells "kwriteconfig6 --file kdeglobals --group Icons --key Theme Papirus-Dark" empty
   echo "Set Papirus-Dark as the active Plasma icon theme."
 
+-- | Konsole ships no loose .colorscheme/.profile files on this system
+-- to begin with (its stock Breeze scheme and default profile are Qt
+-- resources compiled into the binary, not files on disk -- confirmed
+-- directly: nothing under /usr/share, and konsole's own rpm file list
+-- has no *.colorscheme or *.profile entries at all), so there's nothing
+-- pre-existing here to clobber. Uses the same Solarized Dark palette as
+-- plasma/SolarizedDark.colors/waybar/fuzzel/hyprland.conf, mapped onto
+-- the standard 16-ANSI-color Solarized terminal convention (see that
+-- .colorscheme file's own header comment for the exact mapping).
+writeKonsoleSolarizedTheme :: IO ()
+writeKonsoleSolarizedTheme = do
+  curdir <- pwd
+  homeDir <- home
+  let konsoleDir = homeDir </> ".local/share/konsole"
+      colorSchemePath = konsoleDir </> "SolarizedDark.colorscheme"
+      profilePath = konsoleDir </> "Default.profile"
+  alreadyExists <- testfile profilePath
+  if alreadyExists
+    then echo "~/.local/share/konsole/Default.profile already present, leaving it untouched."
+    else do
+      mktree konsoleDir
+      cp (curdir </> "konsole/SolarizedDark.colorscheme") colorSchemePath
+      cp (curdir </> "konsole/Default.profile") profilePath
+      shells
+        "kwriteconfig6 --file konsolerc --group \"Desktop Entry\" --key DefaultProfile Default.profile"
+        empty
+      echo "Wrote Konsole's Solarized Dark color scheme and set it as the default profile."
+
 -- | No Fedora package exists; kompose's GitHub releases publish an
 -- aarch64 binary directly (`kompose-linux-arm64`), unlike the amd64 one
 -- upstream's own script used.
@@ -1612,6 +1640,7 @@ main = do
   installPapirusIconTheme
   installPapirusFolders
   applyPapirusDarkOrangeTheme
+  writeKonsoleSolarizedTheme
   nixInstalled <- which "nix-shell"
   case nixInstalled of
     Just nixShellLoc ->
