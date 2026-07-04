@@ -58,6 +58,16 @@ export EMAIL="josiah.berkebile@protonmail.com"
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(git fasd python history-substring-search colored-man-pages colorize command-not-found globalias common-aliases compleat vi-mode zsh-navigation-tools zsh-autosuggestions zsh-syntax-highlighting nix-zsh-completions nix-shell)
 
+# zsh-autosuggestions' own default (fg=8, bright black) is invisible
+# under Solarized Dark: bright0 (ANSI color 8) is set to the same value
+# as the terminal background (002b36) in both konsole/SolarizedDark.colorscheme
+# and foot/foot.ini -- that's Solarized's own convention for "blend
+# with background", not a mistake, but it means anything relying on
+# color 8 for visible-but-subtle text needs a different color instead.
+# fg=10 is bright2 (base01, 586e75) -- Solarized's own "secondary
+# content" color, muted but clearly visible against the background.
+export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=10'
+
 source $ZSH/oh-my-zsh.sh
 
 prompt_nix_shell_setup
