@@ -708,6 +708,27 @@ writeVifmDesktopFile = do
       cp (curdir </> "vifm.desktop") desktopPath
       echo "Wrote ~/.local/share/applications/vifm.desktop so vifm shows up in the launcher."
 
+-- | foot is now the default terminal (hypr/hyprland.conf's mod-shift-Return
+-- and mod-e bindings), by request -- Solarized Dark to match, using the
+-- same standard 16-ANSI-color mapping as konsole/SolarizedDark.colorscheme.
+-- foot's own default foreground/background (839496/002b36) already happen
+-- to be Solarized's base0/base03; only the ANSI regular*/bright* colors
+-- (foot's stock "starlight" palette) actually needed overriding, confirmed
+-- via `man foot.ini`.
+writeFootConfig :: IO ()
+writeFootConfig = do
+  curdir <- pwd
+  homeDir <- home
+  let configDir = homeDir </> ".config/foot"
+      configPath = configDir </> "foot.ini"
+  alreadyExists <- testfile configPath
+  if alreadyExists
+    then echo "~/.config/foot/foot.ini already present, leaving it untouched."
+    else do
+      mktree configDir
+      cp (curdir </> "foot/foot.ini") configPath
+      echo "Wrote ~/.config/foot/foot.ini (Solarized Dark, Hack 10pt)."
+
 -- | No dnf/Flathub package (there's a third-party COPR,
 -- chrisbouchard/neovide-nightly, but it's unvetted and not confirmed to
 -- build for aarch64, and there's an open but unmerged Flathub PR). Built
@@ -1728,6 +1749,7 @@ main = do
     "foot already installed at "
     "foot already installed."
   writeVifmDesktopFile
+  writeFootConfig
   dnfInstall
     "sensors"
     "lm_sensors"
