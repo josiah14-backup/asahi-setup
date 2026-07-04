@@ -16,6 +16,18 @@
 -- install it by hand if you want it: `sudo dnf install -y rkhunter`, then
 -- follow the prompts.
 --
+-- widevine-installer (the dnf package, installed below) only lays down
+-- the dnf/Firefox/Chromium config plumbing -- the actual Widevine CDM
+-- binary (needed for DRM-gated content like Spotify's/Netflix's web
+-- players to play at all) is fetched and adapted from a ChromeOS image
+-- by a separate `sudo widevine-installer` run, which is deliberately
+-- interactive (prompts twice: once for you to read the proprietary
+-- license, once after showing the exact CDM version about to be
+-- installed) and not something this script pipes answers into on your
+-- behalf. Run it by hand once after provisioning; a browser restart
+-- (not a full re-login) is enough afterward for Firefox/Chromium to
+-- pick it up.
+--
 -- The Mirage Matrix client still requires a manual download:
 -- https://github.com/mirukana/mirage/blob/master/docs/INSTALL.md#flatpak
 --
@@ -1657,6 +1669,21 @@ main = do
   -- i965-va-driver, intel-media-va-driver-non-free, and all the
   -- nvidia-*/system76-* hardware packages, none of which apply here.
   shells "sudo dnf install -y mesa-va-drivers libva-utils" empty
+  -- Google never officially ships a Widevine CDM for aarch64 Linux, so
+  -- DRM-gated web playback (Spotify's web player, Netflix, etc.) fails
+  -- in every browser here (Firefox, Chromium/Brave, all flatpak aarch64
+  -- builds) without it. This is the Asahi Linux project's own package
+  -- (https://github.com/AsahiLinux/widevine-installer, in Fedora's repos
+  -- directly, no extra COPR), which adapts Google's ChromeOS arm64 CDM
+  -- build to run on vanilla ARM64 Linux (including this kernel's 16K
+  -- page size) rather than shipping a new CDM. Installing the package
+  -- alone isn't enough -- see the `sudo widevine-installer` note in this
+  -- file's header comment.
+  dnfInstall
+    "widevine-installer"
+    "widevine-installer"
+    "Widevine CDM installer already installed at "
+    "Widevine CDM installer already installed."
   dnfInstall
     "most"
     "most"
