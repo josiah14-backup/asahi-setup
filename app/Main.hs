@@ -340,6 +340,54 @@ installOhMyZshPlugins = do
   else
     echo "Nix-Shell ZSH plugin already installed."
 
+-- | .zshrc (line ~161) unconditionally runs `eval "$(pyenv init -)"` and
+-- ~100-110 puts $PYENV_ROOT/bin on PATH, but neither this repo nor
+-- pop-os-setup before it ever actually installed pyenv itself -- those
+-- dotfile lines only ever worked on whatever machine originally had
+-- pyenv installed by hand. Standard git-clone install (not the
+-- pyenv-installer curl script, to match this repo's own git-clone
+-- convention for similar tools above), plus the dnf packages pyenv's own
+-- wiki lists as required to build Pythons from source later.
+installPyenv :: IO ()
+installPyenv = do
+  pyenvRoot <- fmap (</> ".pyenv") home
+  pyenvInstalled <- testpath pyenvRoot
+  if pyenvInstalled
+    then echo "pyenv already installed."
+    else do
+      shells
+        "sudo dnf install -y make gcc zlib-devel bzip2 bzip2-devel \
+        \readline-devel sqlite sqlite-devel openssl-devel tk-devel \
+        \libffi-devel xz-devel ncurses-devel"
+        empty
+      shells "git clone https://github.com/pyenv/pyenv.git ~/.pyenv" empty
+      echo "Installed pyenv into ~/.pyenv."
+
+-- | .tmux.conf declares `@plugin 'tmux-sensible'` and `@plugin
+-- 'tmux-powerline'` and runs tpm's init script, but tpm itself
+-- (~/.tmux/plugins/tpm) was never actually cloned onto this machine, so
+-- neither plugin was ever installed or loaded -- the powerline styling
+-- never had a chance to render. tpm's own install_plugins script (not
+-- the interactive prefix + I keybind, since this runs unattended) reads
+-- the @plugin lines already in .tmux.conf and fetches each one.
+--
+-- install_plugins always runs, even when tpm was already cloned:
+-- tpm existing on disk doesn't mean its plugins were ever successfully
+-- fetched (its own script is idempotent -- it checks
+-- plugin_already_installed per-plugin internally), so gating it behind
+-- the tpm-exists check would mean a tpm clone that succeeded while a
+-- plugin fetch failed (or was interrupted) could never be retried on a
+-- later run.
+installTmuxPluginManager :: IO ()
+installTmuxPluginManager = do
+  tpmDir <- fmap (</> ".tmux/plugins/tpm") home
+  tpmInstalled <- testpath tpmDir
+  if tpmInstalled
+    then echo "tmux plugin manager (tpm) already installed."
+    else shells "git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm" empty
+  shells "~/.tmux/plugins/tpm/bin/install_plugins" empty
+  echo "Fetched .tmux.conf's declared tmux plugins."
+
 installPowerline :: IO ()
 installPowerline =
   shellStrictWithErr "pip show powerline-status" empty
@@ -1344,9 +1392,14 @@ main = do
     "python3-poetry"
     "Poetry package manager for Python already installed at "
     "Poetry package manager for Python already installed."
+  installPyenv
   installOhMyZshPlugins
   installPowerline
   copyDotFilesToHome
+  -- tpm's install_plugins script reads the @plugin lines out of the
+  -- deployed ~/.tmux.conf, so this has to run after copyDotFilesToHome,
+  -- not before.
+  installTmuxPluginManager
   writeKxkbrcKeyRemaps
   nixInstalled <- which "nix-shell"
   case nixInstalled of
