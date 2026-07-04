@@ -728,6 +728,7 @@ installNeovide = do
       Nothing ->
         shells "$HOME/.cargo/bin/cargo install neovide --locked" empty
   writeNeovideDesktopFile
+  writeNeovideConfig
 
 -- | Neovide has no .desktop file of its own, same gap spotify_player
 -- and vifm had -- unlike those two (TUIs needing a terminal wrapper),
@@ -747,6 +748,25 @@ writeNeovideDesktopFile = do
       mktree appsDir
       cp (curdir </> "neovide.desktop") desktopPath
       echo "Wrote ~/.local/share/applications/neovide.desktop so Neovide shows up in the launcher."
+
+-- | No ~/.config/nvim at all exists on this machine, so Neovide fell
+-- back to its own default font size, which rendered noticeably larger
+-- than wanted -- confirmed directly, fixed the same way as the earlier
+-- Konsole/qt6ct font fixes, matching the same Hack/10pt Josiah already
+-- confirmed there.
+writeNeovideConfig :: IO ()
+writeNeovideConfig = do
+  curdir <- pwd
+  homeDir <- home
+  let configDir = homeDir </> ".config/neovide"
+      configPath = configDir </> "config.toml"
+  alreadyExists <- testfile configPath
+  if alreadyExists
+    then echo "~/.config/neovide/config.toml already present, leaving it untouched."
+    else do
+      mktree configDir
+      cp (curdir </> "neovide/config.toml") configPath
+      echo "Wrote ~/.config/neovide/config.toml (Hack, 10pt)."
 
 writeLibrespotSystemdService :: IO ()
 writeLibrespotSystemdService = do
