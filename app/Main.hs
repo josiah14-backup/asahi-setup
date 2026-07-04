@@ -76,7 +76,7 @@
 --     actual audio receiver in credential-free "zeroconf" mode -- you
 --     "Connect to a device" from Spotify's own app elsewhere and pick
 --     "Librespot (Asahi)" from the list, so this script never handles
---     your Spotify password -- plus spotify-player, a Rust TUI you can
+--     your Spotify password -- plus spotify_player, a Rust TUI you can
 --     separately log into (official Web API OAuth) for local
 --     browsing/search and Connect-device control.
 --   * Zoom: still just the official web/PWA client (Zoom's own
@@ -625,7 +625,7 @@ installSlacky =
 -- | Spotify has no Linux ARM64 client at all, official or otherwise, so
 -- this installs librespot (a mature, actively maintained open-source
 -- reimplementation of the Spotify Connect protocol) as the actual audio
--- receiver, plus spotify-player (a Rust TUI) for local browsing/search
+-- receiver, plus spotify_player (a Rust TUI) for local browsing/search
 -- and Connect-device control. Both build natively for aarch64 via cargo,
 -- no emulation involved. librespot.service runs librespot in
 -- credential-free "zeroconf" discovery mode -- see librespot/librespot.service
@@ -648,20 +648,50 @@ installSpotifyConnectReceiver = do
       Nothing -> do
         shells "$HOME/.cargo/bin/cargo install librespot --locked" empty
         writeLibrespotSystemdService
-  which "spotify-player"
+  -- `cargo install spotify_player` (matching the crate name) is what
+  -- actually lands on disk as the binary name -- confirmed directly via
+  -- `cargo install --list` -- not "spotify-player" with a hyphen (the
+  -- name this used to check for here, which meant `which` could never
+  -- find it and this step always re-ran cargo install unnecessarily).
+  which "spotify_player"
     >>= \case
       Just playerLoc ->
         echoWhichLocation
           playerLoc
-          "spotify-player already installed at "
-          "spotify-player already installed."
+          "spotify_player already installed at "
+          "spotify_player already installed."
       Nothing ->
         shells "$HOME/.cargo/bin/cargo install spotify_player --locked" empty
+  writeSpotifyPlayerDesktopFile
+
+-- | spotify_player is a TUI with no .desktop file anywhere on the
+-- system (confirmed directly) -- fuzzel and any other XDG-compliant
+-- launcher only lists apps that have one, so it could never show up
+-- there regardless of whether the binary itself was installed
+-- correctly. Launches into Konsole, same pattern as hyprland.conf's own
+-- `konsole -e tmux attach` binding. Icon is utilities-terminal rather
+-- than a "spotify"-named icon: Papirus-Dark inherits from
+-- breeze-dark/hicolor, not from the base Papirus theme that actually
+-- has spotify app icons, so a "spotify" icon name would silently
+-- resolve to nothing (confirmed directly).
+writeSpotifyPlayerDesktopFile :: IO ()
+writeSpotifyPlayerDesktopFile = do
+  curdir <- pwd
+  homeDir <- home
+  let appsDir = homeDir </> ".local/share/applications"
+      desktopPath = appsDir </> "spotify_player.desktop"
+  alreadyExists <- testfile desktopPath
+  if alreadyExists
+    then echo "~/.local/share/applications/spotify_player.desktop already present, leaving it untouched."
+    else do
+      mktree appsDir
+      cp (curdir </> "spotify_player.desktop") desktopPath
+      echo "Wrote ~/.local/share/applications/spotify_player.desktop so spotify_player shows up in the launcher."
 
 -- | No dnf/Flathub package (there's a third-party COPR,
 -- chrisbouchard/neovide-nightly, but it's unvetted and not confirmed to
 -- build for aarch64, and there's an open but unmerged Flathub PR). Built
--- via cargo instead, same pattern as librespot/spotify-player above.
+-- via cargo instead, same pattern as librespot/spotify_player above.
 -- Neovide is a genuine native-Wayland GUI for Neovim (built on winit,
 -- not XWayland) -- the replacement for upstream's gvim/vim-X11, which is
 -- X11-only and was dropped outright rather than translated.
@@ -908,6 +938,72 @@ writeKonsoleSolarizedTheme = do
         "kwriteconfig6 --file konsolerc --group \"Desktop Entry\" --key DefaultProfile Default.profile"
         empty
       echo "Wrote Konsole's Solarized Dark color scheme and set it as the default profile."
+
+-- | There's no packaged Solarized GTK theme in Fedora's repos (checked
+-- directly), and GTK has no equivalent to qt6ct's "point at a KDE
+-- .colors file" bridge. KDE's own kde-gtk-config normally auto-generates
+-- ~/.config/gtk-{3,4}.0/colors.css from the active Plasma color scheme
+-- (via its colorreload-gtk-module + kded "gtkconfig" plugin), but that
+-- wasn't firing in this Hyprland session -- confirmed directly: it still
+-- had Breeze-Dark's stock (non-Solarized) values despite SolarizedDark
+-- already being the applied Plasma scheme. gtk/colors.css recolors the
+-- same "_breeze"-suffixed names KDE's own generated file uses (Breeze's
+-- own gtk-3.0/gtk.css aliases the canonical unsuffixed GTK names to
+-- these, and only overriding the _breeze names is exactly what KDE's own
+-- tooling does, so that's sufficient here too). Deployed identically to
+-- both GTK3 and GTK4 config dirs -- Breeze-Dark's GTK3/GTK4 themes use
+-- an identical set of these names (confirmed via diff).
+writeGtkColorsCss :: IO ()
+writeGtkColorsCss = do
+  curdir <- pwd
+  homeDir <- home
+  let gtk3ColorsPath = homeDir </> ".config/gtk-3.0/colors.css"
+      gtk4ColorsPath = homeDir </> ".config/gtk-4.0/colors.css"
+  gtk3AlreadyCustomized <- checkSolarizedNotApplied gtk3ColorsPath
+  gtk4AlreadyCustomized <- checkSolarizedNotApplied gtk4ColorsPath
+  if not gtk3AlreadyCustomized && not gtk4AlreadyCustomized
+    then echo "GTK3/GTK4 colors.css already Solarized, leaving them untouched."
+    else do
+      mktree (homeDir </> ".config/gtk-3.0")
+      mktree (homeDir </> ".config/gtk-4.0")
+      cp (curdir </> "gtk/colors.css") gtk3ColorsPath
+      cp (curdir </> "gtk/colors.css") gtk4ColorsPath
+      echo "Wrote Solarized Dark to ~/.config/gtk-{3,4}.0/colors.css."
+  where
+    checkSolarizedNotApplied path = do
+      exists <- testfile path
+      if not exists
+        then return True
+        else not . isInfixOf (pack "solarized_base03") <$> strict (input path)
+
+-- | GTK's own icon theme setting is separate from kdeglobals' (used by
+-- Qt/KDE apps) -- confirmed directly, it was still breeze-dark despite
+-- Papirus-Dark already being set as the Plasma/qt6ct icon theme.
+-- Editing settings.ini directly (not writing it wholesale, unlike
+-- colors.css above): it has many other pre-existing settings (cursor
+-- theme, sound theme, etc.) this repo doesn't otherwise manage, so a
+-- targeted sed-style replace is safer than templating the whole file.
+setGtkIconTheme :: IO ()
+setGtkIconTheme = do
+  homeDir <- home
+  fixSettingsIni (homeDir </> ".config/gtk-3.0/settings.ini") "~/.config/gtk-3.0/settings.ini"
+  fixSettingsIni (homeDir </> ".config/gtk-4.0/settings.ini") "~/.config/gtk-4.0/settings.ini"
+  where
+    fixSettingsIni path label = do
+      exists <- testfile path
+      if not exists
+        then echo (label <> " doesn't exist, skipping.")
+        else do
+          contents <- strict (input path)
+          if isInfixOf (pack "gtk-icon-theme-name=Papirus-Dark") contents
+            then echo (label <> " already uses Papirus-Dark.")
+            else do
+              shells
+                ( "sed -i 's/^gtk-icon-theme-name=.*/gtk-icon-theme-name=Papirus-Dark/' "
+                    <> format fp path
+                )
+                empty
+              echo ("Set gtk-icon-theme-name=Papirus-Dark in " <> label)
 
 -- | No Fedora package exists; kompose's GitHub releases publish an
 -- aarch64 binary directly (`kompose-linux-arm64`), unlike the amd64 one
@@ -1662,6 +1758,8 @@ main = do
   installPapirusFolders
   applyPapirusDarkOrangeTheme
   writeKonsoleSolarizedTheme
+  writeGtkColorsCss
+  setGtkIconTheme
   nixInstalled <- which "nix-shell"
   case nixInstalled of
     Just nixShellLoc ->
