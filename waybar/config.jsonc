@@ -1,0 +1,85 @@
+// Waybar config for asahi-setup's Hyprland session.
+//
+// Waybar ships with no config file of its own, so with none present it
+// falls back to /etc/xdg/waybar/config.jsonc, which uses sway/* module
+// names (sway/workspaces, sway/window, sway/mode, sway/scratchpad,
+// sway/language) -- those are Sway's IPC, not Hyprland's, so under this
+// Hyprland session they silently render nothing. Waybar 0.15.0 (confirmed
+// via `strings $(which waybar) | grep hyprland/`) has the real
+// hyprland/workspaces, hyprland/window, hyprland/language equivalents
+// built in, used below instead.
+//
+// power-profiles-daemon and temperature/cpu/memory are left out of the
+// fallback config's module list on purpose: power-profiles-daemon is
+// inactive on this machine (`systemctl is-active` confirmed), and Apple
+// Silicon's thermal sensors don't live at the hwmon paths the stock
+// temperature module expects.
+{
+    "height": 24,
+    "spacing": 4,
+
+    "modules-left": ["hyprland/workspaces"],
+    "modules-center": ["hyprland/window"],
+    "modules-right": [
+        "idle_inhibitor",
+        "backlight",
+        "pulseaudio",
+        "network",
+        "battery",
+        "clock",
+        "tray"
+    ],
+
+    "hyprland/workspaces": {
+        "format": "{id}"
+    },
+
+    "idle_inhibitor": {
+        "format": "{icon}",
+        "format-icons": {
+            "activated": "",
+            "deactivated": ""
+        }
+    },
+
+    "backlight": {
+        "format": "{percent}% {icon}",
+        "format-icons": ["", ""]
+    },
+
+    "pulseaudio": {
+        "format": "{volume}% {icon} {format_source}",
+        "format-muted": " {format_source}",
+        "format-source": "{volume}% ",
+        "format-source-muted": "",
+        "format-icons": {
+            "default": ["", "", ""]
+        },
+        "on-click": "pavucontrol"
+    },
+
+    "network": {
+        "format-wifi": "{essid} ({signalStrength}%) ",
+        "format-ethernet": "{ipaddr}/{cidr} ",
+        "format-disconnected": "Disconnected ⚠"
+    },
+
+    "battery": {
+        "states": {
+            "warning": 30,
+            "critical": 15
+        },
+        "format": "{capacity}% {icon}",
+        "format-charging": "{capacity}% ",
+        "format-plugged": "{capacity}% ",
+        "format-icons": ["", "", "", "", ""]
+    },
+
+    "clock": {
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    },
+
+    "tray": {
+        "spacing": 10
+    }
+}
