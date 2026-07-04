@@ -37,14 +37,14 @@
     "idle_inhibitor": {
         "format": "{icon}",
         "format-icons": {
-            "activated": "",
-            "deactivated": ""
+            "activated": "",
+            "deactivated": ""
         }
     },
 
     "backlight": {
         "format": "{percent}% {icon}",
-        "format-icons": ["", ""]
+        "format-icons": ["🌑", "🌘", "🌗", "🌖", "🌕"]
     },
 
     "pulseaudio": {
@@ -53,7 +53,7 @@
         "format-source": "{volume}% ",
         "format-source-muted": "",
         "format-icons": {
-            "default": ["", "", ""]
+            "default": ["", "", ""]
         },
         "on-click": "pavucontrol"
     },
@@ -65,6 +65,11 @@
     },
 
     "battery": {
+        // Apple Silicon's battery shows up at
+        // /sys/class/power_supply/macsmc-battery, not the BAT0/BAT1 name
+        // Waybar's battery module auto-detects by default -- without
+        // this it silently finds no battery and renders nothing.
+        "bat": "macsmc-battery",
         "states": {
             "warning": 30,
             "critical": 15
@@ -72,7 +77,7 @@
         "format": "{capacity}% {icon}",
         "format-charging": "{capacity}% ",
         "format-plugged": "{capacity}% ",
-        "format-icons": ["", "", "", "", ""]
+        "format-icons": ["", "", "", "", ""]
     },
 
     "clock": {

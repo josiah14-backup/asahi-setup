@@ -60,6 +60,20 @@ button {
     color: #ffffff;
 }
 
+/* Font Awesome 6 ships Solid and Regular as separate font files under
+   the same family name -- most icon glyphs (battery, backlight,
+   pulseaudio, network) only exist in Solid, which Pango only selects at
+   font-weight: 900. Without this, those codepoints silently fall back
+   to Regular and render as blank/missing glyphs while surrounding text
+   (e.g. the battery percentage) renders fine since it's weight-independent. */
+#idle_inhibitor,
+#backlight,
+#pulseaudio,
+#network,
+#battery {
+    font-weight: 900;
+}
+
 #clock {
     background-color: #64727d;
 }
