@@ -746,6 +746,37 @@ writeKxkbrcKeyRemaps = do
       cp (curdir </> "plasma/kxkbrc") kxkbrcPath
       echo "Wrote ~/.config/kxkbrc (caps:swapescape, ctrl:ralt_rctrl). Log out/in for it to take effect; see KDE bug 433265 if it doesn't stick under Wayland."
 
+-- | ~/.config/kxkbrc's Options alone turned out not to be enough on this
+-- machine -- confirmed directly: this Plasma Wayland session's KWin
+-- composes its keyboard config from localectl's system-wide
+-- /etc/X11/xorg.conf.d/00-keyboard.conf at session start, not from the
+-- per-user kxkbrc file (localectl status showed X11 Options:
+-- terminate:ctrl_alt_bksp only, no sign of kxkbrc's Options at all,
+-- and neither `hyprctl`-style live reload nor `qdbus
+-- org.kde.KWin.reconfigure` picked up a change here -- only an actual
+-- logout/login did, same as the dvorak kb_layout issue in
+-- hypr/hyprland.conf). Appends the remaps to whatever X11 Options
+-- localectl already reports rather than overwriting them outright, so
+-- this doesn't clobber the existing terminate:ctrl_alt_bksp (or whatever
+-- else may be set) on a fresh machine's own defaults.
+writeSystemX11KeyboardOptions :: IO ()
+writeSystemX11KeyboardOptions = do
+  (_, currentOptionsLine, _) <-
+    shellStrictWithErr "localectl status | grep 'X11 Options:' | sed 's/.*: //'" empty
+  let currentOptions = strip currentOptionsLine
+      wantedOptions = "caps:swapescape,ctrl:ralt_rctrl"
+  if wantedOptions `isInfixOf` currentOptions
+    then echo "System-wide X11 keyboard options already include the caps/ctrl remaps."
+    else do
+      let combinedOptions =
+            if currentOptions == ""
+              then wantedOptions
+              else currentOptions <> "," <> wantedOptions
+      shells
+        ("sudo localectl set-x11-keymap us pc105 dvorak \"" <> combinedOptions <> "\"")
+        empty
+      echo "Set system-wide X11 keyboard options (caps:swapescape, ctrl:ralt_rctrl) via localectl -- log out/in for KWin to pick it up (a live reconfigure signal isn't enough)."
+
 -- | No Fedora package exists; kompose's GitHub releases publish an
 -- aarch64 binary directly (`kompose-linux-arm64`), unlike the amd64 one
 -- upstream's own script used.
@@ -1454,6 +1485,7 @@ main = do
   -- not before.
   installTmuxPluginManager
   writeKxkbrcKeyRemaps
+  writeSystemX11KeyboardOptions
   nixInstalled <- which "nix-shell"
   case nixInstalled of
     Just nixShellLoc ->
