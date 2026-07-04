@@ -1336,6 +1336,41 @@ writeWaybarConfig = do
       cp (curdir </> "waybar/style.css") (configDir </> "style.css")
       echo "Wrote ~/.config/waybar/{config.jsonc,style.css} (hyprland/* modules, slim bar)."
 
+-- | waybar's custom/camera module (hypr/scripts/camera-status.sh) toggles
+-- the webcam by rmmod/modprobe-ing apple_isp -- confirmed a clean,
+-- self-contained kernel module (lsmod use-count 0, nothing depends on
+-- it) rather than being compiled into the kernel image, so this fully
+-- removes/restores /dev/video0. A waybar click can't answer an
+-- interactive sudo password prompt, so this needs a NOPASSWD rule --
+-- scoped to exactly these two commands, nothing else. Validated with
+-- `visudo -c` before being installed, since a syntax error in any
+-- sudoers file (not just this one) breaks sudo system-wide -- confirmed
+-- this is the standard safe way to hand-install a sudoers.d drop-in.
+writeCameraToggleSudoers :: IO ()
+writeCameraToggleSudoers = do
+  let sudoersPath = "/etc/sudoers.d/asahi-camera-toggle" :: Turtle.FilePath
+      tmpPath = "/tmp/asahi-camera-toggle" :: Turtle.FilePath
+      rule = "josiah ALL=(root) NOPASSWD: /usr/sbin/modprobe apple_isp, /usr/sbin/rmmod apple_isp\n"
+  alreadyExists <- testfile sudoersPath
+  if alreadyExists
+    then echo "/etc/sudoers.d/asahi-camera-toggle already present, leaving it untouched."
+    else do
+      writeTextFile tmpPath rule
+      shell ("visudo -c -f " <> format fp tmpPath) empty
+        >>= \case
+          ExitSuccess -> return ()
+          ExitFailure _ ->
+            die "ERROR: generated sudoers rule for the camera-toggle waybar button failed visudo validation"
+      shells
+        ( "sudo install -m 0440 -o root -g root "
+            <> format fp tmpPath
+            <> " "
+            <> format fp sudoersPath
+        )
+        empty
+      shells ("rm " <> format fp tmpPath) empty
+      echo "Installed a scoped NOPASSWD sudoers rule (modprobe/rmmod apple_isp only) for the waybar camera-toggle button."
+
 -- | Fedora's own `emacs` package already builds with
 -- --with-native-compilation=aot (confirmed by reading emacs.spec out of
 -- the fc44 SRPM), so a plain dnf install doesn't actually get you
@@ -1940,6 +1975,7 @@ main = do
   writeFuzzelConfig
   installHyprland
   writeWaybarConfig
+  writeCameraToggleSudoers
   -- river, just as a curiosity for future window-manager experiments
   -- against its river-window-management-v1 protocol -- not configured
   -- as a usable session (it ships no window management of its own at

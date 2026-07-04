@@ -78,6 +78,7 @@ button {
 #custom-layout,
 #custom-bluetooth,
 #custom-mic,
+#custom-camera,
 #cpu {
     padding: 0 6px;
     color: #839496;
@@ -122,6 +123,19 @@ button {
     color: #fdf6e3;
 }
 
+/* video/video-slash (U+F03D/U+F4E2) are Font Awesome 6 Free Solid
+   glyphs, so this one IS in the font-weight: 900 rule below too. */
+#custom-camera {
+    background-color: #d33682;
+    color: #002b36;
+    margin: 0 2px;
+}
+
+#custom-camera.off {
+    background-color: #586e75;
+    color: #073642;
+}
+
 #cpu {
     background-color: #2aa198;
     color: #002b36;
@@ -141,6 +155,7 @@ button {
 #power-profiles-daemon,
 #battery,
 #custom-mic,
+#custom-camera,
 #cpu {
     font-weight: 900;
 }

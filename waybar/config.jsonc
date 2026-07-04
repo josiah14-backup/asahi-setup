@@ -40,6 +40,7 @@
         "idle_inhibitor",
         "custom/bluetooth",
         "custom/mic",
+        "custom/camera",
         "backlight",
         "pulseaudio",
         "network",
@@ -114,6 +115,24 @@
         "interval": 5,
         "signal": 10,
         "on-click": "~/.config/hypr/scripts/mic-status.sh toggle",
+        "tooltip": true
+    },
+
+    // Disables the webcam at the kernel-module level (rmmod apple_isp),
+    // not just an app-permission toggle -- confirmed apple_isp is a
+    // clean, self-contained module (lsmod use-count 0, nothing depends
+    // on it), so this fully removes/restores /dev/video0 rather than
+    // merely gating access to it. Needs a narrowly-scoped NOPASSWD
+    // sudoers rule (see /etc/sudoers.d/asahi-camera-toggle, or
+    // writeCameraToggleSudoers in Main.hs) limited to exactly
+    // `modprobe apple_isp`/`rmmod apple_isp` -- a waybar click can't
+    // answer an interactive sudo password prompt.
+    "custom/camera": {
+        "exec": "~/.config/hypr/scripts/camera-status.sh",
+        "return-type": "json",
+        "interval": 5,
+        "signal": 11,
+        "on-click": "~/.config/hypr/scripts/camera-status.sh toggle",
         "tooltip": true
     },
 
