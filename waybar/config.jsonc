@@ -9,9 +9,13 @@
 // hyprland/workspaces, hyprland/window, hyprland/language equivalents
 // built in, used below instead.
 //
-// temperature/cpu/memory are left out of the fallback config's module
-// list on purpose: Apple Silicon's thermal sensors don't live at the
-// hwmon paths the stock temperature module expects.
+// temperature/memory are left out of the fallback config's module list
+// on purpose: Apple Silicon's thermal sensors don't live at the hwmon
+// paths the stock temperature module expects (see the cpu module's own
+// comment below for the fuller rundown of what sensor data actually
+// exists on this hardware). cpu usage % is included, since unlike
+// temperature it's computed from /proc/stat rather than needing a
+// hardware sensor.
 //
 // power-profiles-daemon *was* left out for the same reason initially --
 // `systemctl is-active power-profiles-daemon` reported inactive -- but
@@ -30,7 +34,7 @@
     "height": 16,
     "spacing": 4,
 
-    "modules-left": ["hyprland/workspaces", "custom/layout"],
+    "modules-left": ["hyprland/workspaces", "custom/layout", "cpu"],
     "modules-center": ["hyprland/window"],
     "modules-right": [
         "idle_inhibitor",
@@ -45,6 +49,19 @@
 
     "hyprland/workspaces": {
         "format": "{id}"
+    },
+
+    // CPU temperature/GPU usage+temp are deliberately not included here:
+    // this Apple Silicon (Asahi) machine exposes no CPU/GPU-specific
+    // thermal sensor at all (checked directly via `sensors`/hwmon and
+    // /sys/class/thermal/ -- only battery, NVMe, and misc SMC sensors
+    // exist) and no gpu_busy-style sysfs file for the Asahi GPU driver
+    // either (checked the DRM card directories directly). CPU usage % is
+    // the only one of the four actually available, since it's computed
+    // from /proc/stat rather than needing a hardware sensor.
+    "cpu": {
+        "format": "{usage}% ",
+        "tooltip": false
     },
 
     // Shows the master-layout orientation (left/right/top/bottom/center)

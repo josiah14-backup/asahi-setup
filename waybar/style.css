@@ -75,7 +75,8 @@ button {
 #battery,
 #clock,
 #tray,
-#custom-layout {
+#custom-layout,
+#cpu {
     padding: 0 6px;
     color: #839496;
 }
@@ -83,6 +84,12 @@ button {
 #custom-layout {
     background-color: #073642;
     color: #93a1a1;
+    margin: 0 2px;
+}
+
+#cpu {
+    background-color: #2aa198;
+    color: #002b36;
     margin: 0 2px;
 }
 
@@ -97,7 +104,8 @@ button {
 #pulseaudio,
 #network,
 #power-profiles-daemon,
-#battery {
+#battery,
+#cpu {
     font-weight: 900;
 }
 
