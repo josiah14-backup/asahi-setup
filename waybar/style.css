@@ -76,6 +76,7 @@ button {
 #clock,
 #tray,
 #custom-layout,
+#custom-bluetooth,
 #cpu {
     padding: 0 6px;
     color: #839496;
@@ -85,6 +86,25 @@ button {
     background-color: #073642;
     color: #93a1a1;
     margin: 0 2px;
+}
+
+/* bluetooth-b (U+F294) is a Font Awesome 6 Brands glyph, not Free Solid
+   -- Brands ships a single weight, so this deliberately isn't in the
+   font-weight: 900 rule below (that's specifically for Free's
+   Solid/Regular split). */
+#custom-bluetooth {
+    background-color: #268bd2;
+    color: #002b36;
+    margin: 0 2px;
+}
+
+#custom-bluetooth.off {
+    background-color: #586e75;
+    color: #073642;
+}
+
+#custom-bluetooth.connected {
+    background-color: #859900;
 }
 
 #cpu {

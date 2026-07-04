@@ -38,6 +38,7 @@
     "modules-center": ["hyprland/window"],
     "modules-right": [
         "idle_inhibitor",
+        "custom/bluetooth",
         "backlight",
         "pulseaudio",
         "network",
@@ -75,6 +76,28 @@
         "interval": "once",
         "signal": 8,
         "format": "{}"
+    },
+
+    // bluedevil's own tray icon can't dock here at all -- it's a Plasma
+    // Plasmoid (a QML widget that only loads inside plasmashell's
+    // systemtray host), not a standalone process publishing a
+    // StatusNotifierItem the way waybar's tray module (and blueman's
+    // applet) expect. blueman itself was deliberately not used either:
+    // bluedevil's kded plugin is already running in this session
+    // (confirmed via `pgrep kded6`) and is very likely already
+    // registered as BlueZ's default pairing agent, so running a second
+    // applet that also registers as an agent would fight over that role
+    // -- see hypr/scripts/bluetooth-status.sh's own header for the full
+    // reasoning. This custom module reads state via plain bluetoothctl
+    // instead, so it can't create that conflict.
+    "custom/bluetooth": {
+        "exec": "~/.config/hypr/scripts/bluetooth-status.sh",
+        "return-type": "json",
+        "interval": 5,
+        "signal": 9,
+        "on-click": "~/.config/hypr/scripts/bluetooth-status.sh toggle",
+        "on-click-right": "~/.config/hypr/scripts/bluetooth-status.sh pair",
+        "tooltip": true
     },
 
     "idle_inhibitor": {
