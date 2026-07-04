@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Vifm
+Comment=Vi-like terminal file manager
+Exec=foot vifm
+Terminal=false
+Type=Application
+Icon=vifm
+Categories=System;FileTools;FileManager;

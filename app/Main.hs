@@ -688,6 +688,26 @@ writeSpotifyPlayerDesktopFile = do
       cp (curdir </> "spotify_player.desktop") desktopPath
       echo "Wrote ~/.local/share/applications/spotify_player.desktop so spotify_player shows up in the launcher."
 
+-- | vifm is a TUI with no .desktop file of its own, same gap
+-- spotify_player had -- launches into foot (a lighter terminal than
+-- this repo's usual Konsole) rather than the heavier default, by
+-- request. Icon=vifm resolves via hicolor (which Papirus-Dark inherits
+-- from), confirmed directly rather than assumed the way the earlier
+-- spotify_player icon lookup had to fall back to a generic one.
+writeVifmDesktopFile :: IO ()
+writeVifmDesktopFile = do
+  curdir <- pwd
+  homeDir <- home
+  let appsDir = homeDir </> ".local/share/applications"
+      desktopPath = appsDir </> "vifm.desktop"
+  alreadyExists <- testfile desktopPath
+  if alreadyExists
+    then echo "~/.local/share/applications/vifm.desktop already present, leaving it untouched."
+    else do
+      mktree appsDir
+      cp (curdir </> "vifm.desktop") desktopPath
+      echo "Wrote ~/.local/share/applications/vifm.desktop so vifm shows up in the launcher."
+
 -- | No dnf/Flathub package (there's a third-party COPR,
 -- chrisbouchard/neovide-nightly, but it's unvetted and not confirmed to
 -- build for aarch64, and there's an open but unmerged Flathub PR). Built
@@ -1658,6 +1678,16 @@ main = do
     "vifm"
     "Vifm already installed at "
     "Vifm already installed."
+  -- foot: a minimal, Wayland-native terminal used just for vifm's
+  -- launcher entry (see writeVifmDesktopFile) rather than the heavier
+  -- Konsole this repo uses elsewhere -- vifm is a TUI with no launcher
+  -- entry of its own otherwise, same gap spotify_player had.
+  dnfInstall
+    "foot"
+    "foot"
+    "foot already installed at "
+    "foot already installed."
+  writeVifmDesktopFile
   dnfInstall
     "sensors"
     "lm_sensors"
