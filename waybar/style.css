@@ -74,9 +74,16 @@ button {
 #power-profiles-daemon,
 #battery,
 #clock,
-#tray {
+#tray,
+#custom-layout {
     padding: 0 6px;
     color: #839496;
+}
+
+#custom-layout {
+    background-color: #073642;
+    color: #93a1a1;
+    margin: 0 2px;
 }
 
 /* Font Awesome 6 ships Solid and Regular as separate font files under

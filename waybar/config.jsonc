@@ -30,7 +30,7 @@
     "height": 16,
     "spacing": 4,
 
-    "modules-left": ["hyprland/workspaces"],
+    "modules-left": ["hyprland/workspaces", "custom/layout"],
     "modules-center": ["hyprland/window"],
     "modules-right": [
         "idle_inhibitor",
@@ -45,6 +45,18 @@
 
     "hyprland/workspaces": {
         "format": "{id}"
+    },
+
+    // Shows the master-layout orientation (left/right/top/bottom/center)
+    // that mod+Return's cycle-master-orientation.sh tracks -- Hyprland
+    // itself exposes no live query for this (see that script's own
+    // header comment), so this reads the same state file it writes,
+    // refreshed via the realtime signal it sends rather than polling.
+    "custom/layout": {
+        "exec": "cat ~/.cache/hypr-master-orientation 2>/dev/null || echo left",
+        "interval": "once",
+        "signal": 8,
+        "format": "{}"
     },
 
     "idle_inhibitor": {
