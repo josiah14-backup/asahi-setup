@@ -10,7 +10,15 @@ After=network-online.target
 # Runs in credential-free "zeroconf" discovery mode: pick "Librespot (Asahi)"
 # from the device list in Spotify's own app (phone/web/desktop) elsewhere to
 # connect, rather than storing a Spotify password here.
-ExecStart=%h/.cargo/bin/librespot --name "Librespot (Asahi)" --backend alsa --bitrate 320 --enable-volume-normalisation --initial-volume 75 --cache %h/.cache/librespot
+#
+# --backend rodio, not alsa: this had silently crash-looped (thousands of
+# systemd restarts) since whenever it was first set up, because a plain
+# `cargo install librespot --locked` doesn't compile in the alsa cargo
+# feature -- confirmed directly via `librespot --backend bogus`, which
+# lists only rodio/pipe/subprocess as available on this build. rodio
+# (cpal-based) still ends up on the same PipeWire ALSA plugin underneath
+# on this machine, so no functional loss versus alsa specifically.
+ExecStart=%h/.cargo/bin/librespot --name "Librespot (Asahi)" --backend rodio --bitrate 320 --enable-volume-normalisation --initial-volume 75 --cache %h/.cache/librespot
 Restart=on-failure
 RestartSec=5
 
