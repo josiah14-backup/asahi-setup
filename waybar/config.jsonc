@@ -31,7 +31,11 @@
 // systemd service files) -- tuned-ppd already covers this, so nothing
 // extra needs installing.
 {
-    "height": 16,
+    // 16 (this file's original tuning) was sized for eDP-1's old 2.0x
+    // auto-detected scale; bumped to 24 then 32 now that the display's
+    // on 1.5x (see hyprland.conf's monitor line) -- less zoom means the
+    // same pixel height reads visually smaller than it did before.
+    "height": 32,
     "spacing": 4,
 
     "modules-left": ["hyprland/workspaces", "custom/layout", "cpu"],

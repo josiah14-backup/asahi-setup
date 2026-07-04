@@ -946,8 +946,8 @@ writeQt6ctConfig = do
             <> "style=Fusion\n"
             <> "\n"
             <> "[Fonts]\n"
-            <> "fixed=\"Hack,10,-1,5,50,0,0,0,0,0\"\n"
-            <> "general=\"Noto Sans,10,-1,5,50,0,0,0,0,0\"\n"
+            <> "fixed=\"Hack,11,-1,5,50,0,0,0,0,0\"\n"
+            <> "general=\"Noto Sans,11,-1,5,50,0,0,0,0,0\"\n"
         )
       echo "Wrote ~/.config/qt6ct/qt6ct.conf (Solarized Dark, via the same SolarizedDark.colors file Plasma uses)."
 
