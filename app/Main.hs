@@ -1192,6 +1192,55 @@ writeFuzzelConfig = do
       cp (curdir </> "fuzzel/fuzzel.ini") (configDir </> "fuzzel.ini")
       echo "Wrote ~/.config/fuzzel/fuzzel.ini (Solarized Dark)."
 
+-- | Same solopasha/hyprland COPR as installHyprland below -- these close
+-- a gap hyprland.conf used to document explicitly ("mod-shift-l screen
+-- lock (no lock daemon set up for this session)"): `loginctl
+-- lock-session` existed as a command, but nothing was listening for the
+-- Lock signal, so it was a silent no-op. hyprlock (the lock screen) and
+-- hypridle (its idle-timeout/before-suspend trigger) are both from the
+-- same maintainer/ecosystem as Hyprland itself.
+installHyprlockAndHypridle :: IO ()
+installHyprlockAndHypridle = do
+  dnfInstall
+    "hyprlock"
+    "hyprlock"
+    "hyprlock already installed at "
+    "hyprlock already installed."
+  dnfInstall
+    "hypridle"
+    "hypridle"
+    "hypridle already installed at "
+    "hypridle already installed."
+
+-- | Both hyprlock and hypridle read from ~/.config/hypr/ directly (the
+-- same directory hyprland.conf itself lives in), not their own
+-- subdirectories.
+writeHyprlockConfig :: IO ()
+writeHyprlockConfig = do
+  curdir <- pwd
+  homeDir <- home
+  let configDir = homeDir </> ".config/hypr"
+  alreadyExists <- testfile (configDir </> "hyprlock.conf")
+  if alreadyExists
+    then echo "~/.config/hypr/hyprlock.conf already present, leaving it untouched."
+    else do
+      mktree configDir
+      cp (curdir </> "hypr/hyprlock.conf") (configDir </> "hyprlock.conf")
+      echo "Wrote ~/.config/hypr/hyprlock.conf (Solarized Dark)."
+
+writeHypridleConfig :: IO ()
+writeHypridleConfig = do
+  curdir <- pwd
+  homeDir <- home
+  let configDir = homeDir </> ".config/hypr"
+  alreadyExists <- testfile (configDir </> "hypridle.conf")
+  if alreadyExists
+    then echo "~/.config/hypr/hypridle.conf already present, leaving it untouched."
+    else do
+      mktree configDir
+      cp (curdir </> "hypr/hypridle.conf") (configDir </> "hypridle.conf")
+      echo "Wrote ~/.config/hypr/hypridle.conf."
+
 -- | Hyprland has no Fedora repo package at all (a licensing/policy gap
 -- historically, not a technical one), so this uses solopasha/hyprland,
 -- a COPR verified to (a) actually exist, (b) explicitly support
@@ -1976,6 +2025,9 @@ main = do
   installHyprland
   writeWaybarConfig
   writeCameraToggleSudoers
+  installHyprlockAndHypridle
+  writeHyprlockConfig
+  writeHypridleConfig
   -- river, just as a curiosity for future window-manager experiments
   -- against its river-window-management-v1 protocol -- not configured
   -- as a usable session (it ships no window management of its own at
