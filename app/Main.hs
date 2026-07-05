@@ -856,8 +856,22 @@ writeNvimConfig = do
       shells ("cp -r " <> format fp (curdir </> "nvim") <> " " <> format fp configDir) empty
       echo "Wrote ~/.config/nvim (LazyVim, Solarized Dark)."
       shells "nvim --headless \"+Lazy! sync\" +qa" empty
-      shells "nvim --headless -c \"MasonInstall stylua shfmt\" -c \"sleep 20\" -c \"qa\"" empty
-      echo "Bootstrapped LazyVim's plugins and Mason tools (stylua, shfmt)."
+      -- opts.servers/opts.ensure_installed-driven Mason auto-install is
+      -- gated behind a BufReadPre/FileType event a bare headless +qa run
+      -- never fires, so every LSP/lint tool nvim/lua/plugins/lang-*.lua
+      -- and guile.lua need has to be force-installed here explicitly,
+      -- same reasoning that already required stylua/shfmt. Nushell's
+      -- LSP is just the `nu` binary itself with a flag (see the nushell
+      -- dnfInstall below) -- no separate Mason package for it. clangd is
+      -- NOT in this list -- confirmed directly that Mason's clangd
+      -- package has no aarch64 Linux build at all ("The current platform
+      -- is unsupported"), so it's installed as a system package instead
+      -- (clang-tools-extra, below) and just needs to be on PATH, which
+      -- nvim-lspconfig's clangd server doesn't care how it got there.
+      shells
+        "nvim --headless -c \"MasonInstall stylua shfmt bash-language-server shellcheck rust-analyzer nil pyright taplo json-lsp fish-lsp\" -c \"sleep 60\" -c \"qa\""
+        empty
+      echo "Bootstrapped LazyVim's plugins and Mason tools (stylua, shfmt, bash-language-server, shellcheck, rust-analyzer, nil, pyright, taplo, json-lsp, fish-lsp)."
 
 writeLibrespotSystemdService :: IO ()
 writeLibrespotSystemdService = do
@@ -2040,6 +2054,44 @@ main = do
   installSpotifyConnectReceiver
   installNeovide
   installHackNerdFont
+  -- guile30, so LazyVim's Guile Scheme REPL support (Conjure, nvim/
+  -- below) has an actual Guile runtime to connect to. Fedora's guile30
+  -- package provides the `guile3.0` binary, not a plain `guile` symlink
+  -- -- confirmed directly via `dnf repoquery -l guile30` (no plain
+  -- "guile" package exists in Fedora's repos at all). Start a REPL by
+  -- hand with `guile3.0 --listen=/path/to/socket` before using
+  -- <localleader>cc in a .scm buffer.
+  dnfInstall
+    "guile3.0"
+    "guile30"
+    "Guile 3.0 already installed at "
+    "Guile 3.0 already installed."
+  -- fish and nushell: installed as real shells (not just editor
+  -- language support) by request, alongside their nvim/ LSP wiring
+  -- (fish_lsp, and LazyVim's official nushell extra using `nu --lsp`).
+  -- ksh gets the same editor-side LSP support (via bashls) without
+  -- being installed as a shell here -- not requested.
+  dnfInstall
+    "fish"
+    "fish"
+    "fish already installed at "
+    "fish already installed."
+  dnfInstall
+    "nu"
+    "nushell"
+    "Nushell already installed at "
+    "Nushell already installed."
+  -- clangd, for the C-only LSP setup in nvim/lua/plugins/lang-full.lua --
+  -- installed as a system package rather than left to Mason, since
+  -- Mason's clangd package has no aarch64 Linux build at all (confirmed
+  -- directly: `:MasonInstall clangd` errors "The current platform is
+  -- unsupported"). clang-tools-extra is Fedora's actual clangd-providing
+  -- package (confirmed via `dnf repoquery --whatprovides "*/bin/clangd"`).
+  dnfInstall
+    "clangd"
+    "clang-tools-extra"
+    "clangd already installed at "
+    "clangd already installed."
   writeNvimConfig
   dnfInstall
     "go"
