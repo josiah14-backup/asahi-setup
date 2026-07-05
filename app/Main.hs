@@ -1299,6 +1299,69 @@ writeHypridleConfig = do
       cp (curdir </> "hypr/hypridle.conf") (configDir </> "hypridle.conf")
       echo "Wrote ~/.config/hypr/hypridle.conf."
 
+-- | Hyprland ships no wallpaper support of its own -- that's explicitly
+-- out of compositor scope, delegated to a separate client. hyprpaper is
+-- the official daemon from the same maintainer/ecosystem as Hyprland
+-- itself, same precedent as hyprlock/hypridle above (chosen over a
+-- third-party alternative like swww).
+installHyprpaper :: IO ()
+installHyprpaper =
+  dnfInstall
+    "hyprpaper"
+    "hyprpaper"
+    "hyprpaper already installed at "
+    "hyprpaper already installed."
+
+-- | The actual wallpaper (a Wallhaven torii-gate/samurai-sunset piece,
+-- picked for its orange/purple palette -- a close match to Solarized
+-- Dark's accent colors, see plasma/SolarizedDark.colors) is fetched from
+-- Wallhaven's CDN rather than committed to this repo: Wallhaven image
+-- IDs are stable/immutable, and a 12MB binary doesn't belong in git
+-- history -- same "fetch live instead of vendoring" reasoning as
+-- installHackNerdFont above.
+installWallpaper :: IO ()
+installWallpaper = do
+  homeDir <- home
+  let picturesDir = homeDir </> "Pictures"
+      wallpaperPath = picturesDir </> "torii-samurai-sunset-x62pzo.jpg"
+  alreadyExists <- testfile wallpaperPath
+  if alreadyExists
+    then echo "~/Pictures/torii-samurai-sunset-x62pzo.jpg already present, leaving it untouched."
+    else do
+      mktree picturesDir
+      shells
+        ( "curl -fsSL -A Mozilla/5.0 -o "
+            <> format fp wallpaperPath
+            <> " https://w.wallhaven.cc/full/x6/wallhaven-x62pzo.jpg"
+        )
+        empty
+      echo "Downloaded ~/Pictures/torii-samurai-sunset-x62pzo.jpg (Wallhaven)."
+
+-- | Unlike hyprlock.conf/hypridle.conf above, hyprpaper.conf isn't a
+-- static committed dotfile -- it needs the wallpaper's real absolute
+-- path baked in, generated here from the actual $HOME rather than
+-- hand-hardcoding /home/josiah into a file this repo tracks.
+writeHyprpaperConfig :: IO ()
+writeHyprpaperConfig = do
+  homeDir <- home
+  let configDir = homeDir </> ".config/hypr"
+      configPath = configDir </> "hyprpaper.conf"
+      wallpaperPathText = format fp (homeDir </> "Pictures/torii-samurai-sunset-x62pzo.jpg")
+  alreadyExists <- testfile configPath
+  if alreadyExists
+    then echo "~/.config/hypr/hyprpaper.conf already present, leaving it untouched."
+    else do
+      mktree configDir
+      writeTextFile
+        configPath
+        ( "preload = "
+            <> wallpaperPathText
+            <> "\nwallpaper = ,"
+            <> wallpaperPathText
+            <> "\nsplash = false\n"
+        )
+      echo "Wrote ~/.config/hypr/hyprpaper.conf."
+
 -- | Hyprland has no Fedora repo package at all (a licensing/policy gap
 -- historically, not a technical one), so this uses solopasha/hyprland,
 -- a COPR verified to (a) actually exist, (b) explicitly support
@@ -2094,6 +2157,9 @@ main = do
   installHyprlockAndHypridle
   writeHyprlockConfig
   writeHypridleConfig
+  installHyprpaper
+  installWallpaper
+  writeHyprpaperConfig
   -- river, just as a curiosity for future window-manager experiments
   -- against its river-window-management-v1 protocol -- not configured
   -- as a usable session (it ships no window management of its own at
