@@ -460,6 +460,29 @@ disambiguateSystemDesktopFile appsDir (appId, displayName) = do
         )
         empty
 
+-- | nvim/lua/plugins/lang-full.lua's Nix support (LazyVim's official
+-- nix extra) configures conform.nvim to format via nixfmt -- but Mason
+-- has no aarch64 Linux build for it at all (confirmed directly:
+-- `:MasonInstall nixfmt` errors "The current platform is unsupported",
+-- same gap as clangd), and Fedora doesn't package it either (`dnf list
+-- --available nixfmt` finds nothing). Nix itself is already on this
+-- machine by the time this runs, so installing nixfmt through it
+-- (nixpkgs#nixfmt, the actual official Nix formatter -- confirmed via
+-- `nix search nixpkgs "^nixfmt"`, not to be confused with the separate
+-- nixfmt-rfc-style/nixfmt-rs/nixfmt-tree variants) is the natural fit,
+-- rather than fighting Mason/dnf for a platform build that doesn't
+-- exist.
+installNixfmt :: IO ()
+installNixfmt =
+  which "nixfmt"
+    >>= \case
+      Just loc ->
+        echoWhichLocation
+          loc
+          "nixfmt already installed at "
+          "nixfmt already installed."
+      Nothing -> shells "nix profile install nixpkgs#nixfmt" empty
+
 -- | Fedora doesn't auto-start/enable docker.service or add you to the
 -- docker group the way Debian's postinst scripts do, so both are done
 -- explicitly here.
@@ -862,16 +885,17 @@ writeNvimConfig = do
       -- and guile.lua need has to be force-installed here explicitly,
       -- same reasoning that already required stylua/shfmt. Nushell's
       -- LSP is just the `nu` binary itself with a flag (see the nushell
-      -- dnfInstall below) -- no separate Mason package for it. clangd is
-      -- NOT in this list -- confirmed directly that Mason's clangd
-      -- package has no aarch64 Linux build at all ("The current platform
-      -- is unsupported"), so it's installed as a system package instead
-      -- (clang-tools-extra, below) and just needs to be on PATH, which
-      -- nvim-lspconfig's clangd server doesn't care how it got there.
+      -- dnfInstall below) -- no separate Mason package for it. Neither
+      -- clangd nor nixfmt are in this list -- both confirmed directly
+      -- that Mason has no aarch64 Linux build for them at all ("The
+      -- current platform is unsupported"), so they're installed as a
+      -- system package (clang-tools-extra) and via `nix profile`
+      -- (installNixfmt) instead, and just need to be on PATH, which
+      -- nvim-lspconfig/conform.nvim don't care how they got there.
       shells
-        "nvim --headless -c \"MasonInstall stylua shfmt bash-language-server shellcheck rust-analyzer nil pyright taplo json-lsp fish-lsp\" -c \"sleep 60\" -c \"qa\""
+        "nvim --headless -c \"MasonInstall stylua shfmt bash-language-server shellcheck rust-analyzer nil pyright taplo json-lsp fish-lsp statix\" -c \"sleep 60\" -c \"qa\""
         empty
-      echo "Bootstrapped LazyVim's plugins and Mason tools (stylua, shfmt, bash-language-server, shellcheck, rust-analyzer, nil, pyright, taplo, json-lsp, fish-lsp)."
+      echo "Bootstrapped LazyVim's plugins and Mason tools (stylua, shfmt, bash-language-server, shellcheck, rust-analyzer, nil, pyright, taplo, json-lsp, fish-lsp, statix)."
 
 writeLibrespotSystemdService :: IO ()
 writeLibrespotSystemdService = do
@@ -2176,6 +2200,7 @@ main = do
         \&& sudo restorecon -Rv /nix/var/nix/daemon-socket"
         empty
       shells "sudo systemctl enable --now nix-daemon.socket" empty
+  installNixfmt
   installDocker
   dnfInstall
     "az"
