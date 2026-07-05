@@ -153,8 +153,6 @@ alias jj='zz'
 alias zshrc='v ~/.zshrc'
 alias lpgp="lpass show --password -c"
 alias screeps-dir=$HOME/.config/Screeps/scripts/screeps.com/tutorial-1
-alias ssh-tnw="ssh -p 1488 amnesia@208.94.243.156"
-alias fd=fdfind
 alias ipyvi="ipython --TerminalInteractiveShell.editing_mode=vi"
 
 export HISTCONTROL=ignoreboth
