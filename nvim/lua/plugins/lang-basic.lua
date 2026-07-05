@@ -39,10 +39,11 @@ return {
   -- vim-polyglot DOES cover. (Standard ML and Chez Scheme need nothing
   -- at all -- Neovim's own bundled runtime already ships
   -- syntax/sml.vim and syntax/scheme.vim, confirmed directly at
-  -- /usr/share/nvim/runtime/. Lean 4, Mercury, Pharo, Hy, Coconut,
-  -- Factor: no highlighting solution anywhere -- confirmed absent from
-  -- both nvim-treesitter and vim-polyglot -- left as plain text per
-  -- explicit request.)
+  -- /usr/share/nvim/runtime/. Lean 4, Pharo, Hy, Coconut, Factor: no
+  -- highlighting solution anywhere -- confirmed absent from both
+  -- nvim-treesitter and vim-polyglot -- left as plain text per explicit
+  -- request. Mercury is covered separately below, not via vim-polyglot
+  -- -- vim-polyglot itself has no Mercury pack.)
   --
   -- vim-polyglot enables ~150 packs by default (g:polyglot_disabled is
   -- an EXCLUDE list, must be set in `init`, before the plugin loads) --
@@ -97,4 +98,21 @@ return {
       }
     end,
   },
+
+  -- Mercury: no nvim-treesitter parser and no vim-polyglot pack exist
+  -- for it at all, but the language's own upstream repo (and several
+  -- community forks of the same thing) ship a standard ftdetect/
+  -- ftplugin/syntax vim plugin. Deliberately NOT ft-scoped (no `ft =`
+  -- key): its own ftdetect script is what registers ".m"/".moo" as
+  -- Mercury in the first place, so lazy-loading it ON that filetype
+  -- would be a chicken-and-egg deadlock -- same class of issue already
+  -- hit with Nushell's filetype registration. LazyVim's own default for
+  -- custom plugins with no explicit trigger is `lazy = false` (see
+  -- config/lazy.lua's `defaults.lazy = false`), so a bare spec entry
+  -- here is enough, matching vim-polyglot's own entry above.
+  --
+  -- NOTE: claims the ".m" extension unconditionally, which collides
+  -- with Objective-C and MATLAB (both also ".m") -- accepted knowingly,
+  -- since neither was requested for this machine.
+  { "yzhs/mercury-vim" },
 }
