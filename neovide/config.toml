@@ -1,3 +1,11 @@
 [font]
-normal = ["Hack"]
-size = 10.0
+# Hack Nerd Font, not plain Hack: LazyVim's UI (lualine, neo-tree,
+# bufferline, which-key) renders icon glyphs that only exist in the
+# Nerd Font-patched version -- plain Hack would show boxes/missing
+# glyphs for those specifically, same class of icon gotcha as waybar's
+# Font Awesome fonts. Size bumped to 11 to match foot's own post-1.5x-
+# scale retune (same underlying cause: eDP-1's auto-detected 2.0x scale
+# changed to 1.5x, see hyprland.conf) -- untested at this exact size in
+# Neovide specifically, adjust if it doesn't look right.
+normal = ["Hack Nerd Font"]
+size = 11.0

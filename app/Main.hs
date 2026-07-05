@@ -799,7 +799,65 @@ writeNeovideConfig = do
     else do
       mktree configDir
       cp (curdir </> "neovide/config.toml") configPath
-      echo "Wrote ~/.config/neovide/config.toml (Hack, 10pt)."
+      echo "Wrote ~/.config/neovide/config.toml (Hack Nerd Font, 11pt)."
+
+-- | No dnf/Flathub package for Nerd Fonts at all (checked directly --
+-- `dnf list --available "*nerd-fonts*"` returns nothing), so this
+-- fetches Hack's own release directly from the nerd-fonts project,
+-- same "no clean package, download it" pattern as papirus-folders
+-- above. Needed for LazyVim's UI (lualine, neo-tree, bufferline,
+-- which-key) to render its icon glyphs at all -- plain Hack (already
+-- used everywhere else on this machine) doesn't have them, same class
+-- of icon gotcha as waybar's Font Awesome fonts. Installed to
+-- ~/.local/share/fonts rather than system-wide, so no sudo needed.
+installHackNerdFont :: IO ()
+installHackNerdFont = do
+  homeDir <- home
+  let fontDir = homeDir </> ".local/share/fonts/HackNerdFont"
+  alreadyExists <- testdir fontDir
+  if alreadyExists
+    then echo "~/.local/share/fonts/HackNerdFont already present, leaving it untouched."
+    else do
+      mktree fontDir
+      curdir <- pwd
+      cd fontDir
+      shells
+        "curl -fsSL -o HackNerdFont.zip https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/Hack.zip \
+        \&& unzip -oq HackNerdFont.zip \
+        \&& rm HackNerdFont.zip"
+        empty
+      cd curdir
+      shells "fc-cache -f" empty
+      echo "Installed Hack Nerd Font to ~/.local/share/fonts/HackNerdFont."
+
+-- | No ~/.config/nvim existed at all on this machine, same starting
+-- point as writeNeovideConfig above -- this is LazyVim (the closest
+-- real analog to Doom Emacs for Neovim: a curated, lazy-loaded plugin
+-- framework rather than a from-scratch config), via its own official
+-- starter template. nvim/lua/plugins/colorscheme.lua overrides the
+-- default tokyonight theme with Solarized Dark (maxmx03/solarized.nvim,
+-- verified directly against its source to use the same canonical hex
+-- values as the rest of this machine's theming, not its alternate
+-- "selenized" palette).
+--
+-- Only bootstraps (headless plugin sync) on first install, not on every
+-- re-run -- matches the same "already exists, leave untouched" idempotency
+-- as the config deployment itself, and re-syncing on every provisioning
+-- run would be slow for no benefit once plugins are already installed.
+writeNvimConfig :: IO ()
+writeNvimConfig = do
+  curdir <- pwd
+  homeDir <- home
+  let configDir = homeDir </> ".config/nvim"
+  alreadyExists <- testdir configDir
+  if alreadyExists
+    then echo "~/.config/nvim already present, leaving it untouched."
+    else do
+      shells ("cp -r " <> format fp (curdir </> "nvim") <> " " <> format fp configDir) empty
+      echo "Wrote ~/.config/nvim (LazyVim, Solarized Dark)."
+      shells "nvim --headless \"+Lazy! sync\" +qa" empty
+      shells "nvim --headless -c \"MasonInstall stylua shfmt\" -c \"sleep 20\" -c \"qa\"" empty
+      echo "Bootstrapped LazyVim's plugins and Mason tools (stylua, shfmt)."
 
 writeLibrespotSystemdService :: IO ()
 writeLibrespotSystemdService = do
@@ -1908,10 +1966,18 @@ main = do
     "ripgrep"
     "Ripgrep already installed at "
     "Ripgrep already installed."
+  -- fd, for LazyVim's Telescope file-finder (nvim/ below).
+  dnfInstall
+    "fd"
+    "fd-find"
+    "fd already installed at "
+    "fd already installed."
   installRustLang
   installJuliaup
   installSpotifyConnectReceiver
   installNeovide
+  installHackNerdFont
+  writeNvimConfig
   dnfInstall
     "go"
     "golang"
