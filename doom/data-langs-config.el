@@ -2,7 +2,7 @@
 
 ;;; Commentary:
 ;; Languages/formats with no `doom!' :lang module at all -- registered here
-;; via mode-alist-utils.el's shared helper instead. Also covers Prolog:
+;; via the `macrame' package's shared helper instead. Also covers Prolog:
 ;; Emacs core only auto-binds the ".prolog" extension by default, not the
 ;; conventional .pl/.pro/.plt (.pl deliberately accepted as a Perl
 ;; collision -- no Perl support is configured on this machine to collide
@@ -23,9 +23,9 @@
                           (conf-toml-mode  "\\.toml\\'")  ; ships in Emacs core
                           (json-mode       "\\.avsc\\'")  ; Avro schema IS JSON
                           (prolog-mode     "\\.pl\\'" "\\.pro\\'" "\\.plt\\'")))
-  (+asahi/register-mode-patterns 'auto-mode-alist
-                                  (cdr mode->patterns)
-                                  (car mode->patterns)))
+  (macrame-register-mode-patterns 'auto-mode-alist
+                                   (cdr mode->patterns)
+                                   (car mode->patterns)))
 
 ;; forth-mode, gleam-ts-mode, nushell-ts-mode (see packages.el) register
 ;; their own auto-mode-alist entries on load; sql-mode's .sql binding ships

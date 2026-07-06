@@ -11,8 +11,8 @@
 
 ;;; Code:
 
-(+asahi/register-mode-patterns 'auto-mode-alist '("\\.rash\\'") 'racket-mode)
-(+asahi/register-mode-patterns 'interpreter-mode-alist '("rash") 'racket-mode)
+(macrame-register-mode-patterns 'auto-mode-alist '("\\.rash\\'") 'racket-mode)
+(macrame-register-mode-patterns 'interpreter-mode-alist '("rash") 'racket-mode)
 
 (provide 'rash-config)
 ;;; rash-config.el ends here

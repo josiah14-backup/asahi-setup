@@ -1,5 +1,12 @@
 ;;; packages.el -*- lexical-binding: t; -*-
 
+;; Shared, project-agnostic helpers (mode-alist registration, hand-rolled
+;; lsp-mode client setup) extracted into their own standalone package once
+;; the same patterns started recurring across this repo and docker-emacs's
+;; Doom configs -- see https://github.com/josiah14-automation-engineering/macrame.
+(package! macrame
+  :recipe (:host github :repo "josiah14-automation-engineering/macrame"))
+
 ;; Hand-rolled additions for languages with no official Doom :lang module
 ;; (confirmed absent from doomemacs/modules' modules/lang/ directory) --
 ;; same spirit as this machine's nvim/lua/plugins/lang-basic.lua reaching

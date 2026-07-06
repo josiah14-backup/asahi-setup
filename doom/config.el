@@ -39,12 +39,18 @@
 ;; should need zero manual follow-up" convention.
 (setq treesit-auto-install-grammar 'always)
 
+;; `macrame' (packages.el) provides the shared mode-alist/lsp-client
+;; helpers data-langs-config/rash-config/lsp-clients below call --
+;; :demand t forces it to load eagerly here rather than Doom's usual lazy
+;; autoload-on-first-use, since macrame-register-mode-patterns needs to
+;; already be a real function by the time those files run, not just an
+;; autoloaded stub.
+(use-package! macrame
+  :demand t)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; load language configs
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; mode-alist-utils loads first: data-langs-config and rash-config both
-;; depend on the helper it provides.
-(load! "mode-alist-utils")
 (load! "data-langs-config")
 (load! "rash-config")
 (load! "c-config")
