@@ -1,5 +1,5 @@
 -- Full LSP/IDE tier: C (not C++), Rust, Shell (bash/sh/zsh/ksh), Fish,
--- Nushell, Nix, Python, Lua (already core), TOML, JSON. Guile Scheme
+-- Nushell, Nix, Python, Lua (already core), TOML, JSON, Zig. Guile Scheme
 -- lives in guile.lua (Conjure, not LSP -- no reliable Guile LSP exists).
 return {
   -- Official, ready-to-use LazyVim extras -- Mason-managed, zero custom
@@ -17,7 +17,7 @@ return {
   -- against both source files, no custom code needed at all.
   { import = "lazyvim.plugins.extras.lang.nushell" },
 
-  { "nvim-treesitter/nvim-treesitter", opts = { ensure_installed = { "scheme" } } },
+  { "nvim-treesitter/nvim-treesitter", opts = { ensure_installed = { "scheme", "zig" } } },
 
   {
     "neovim/nvim-lspconfig",
@@ -63,6 +63,17 @@ return {
             { "<leader>ch", "<cmd>LspClangdSwitchSourceHeader<cr>", desc = "Switch Source/Header (C)" },
           },
         },
+
+        -- zls: nvim-lspconfig's bundled lsp/zls.lua already scopes itself
+        -- correctly to filetypes {"zig","zir"} with plain cmd={"zls"} --
+        -- no FileType-autocmd workaround needed here, unlike clangd above.
+        -- Mason does have a linux_arm64 build for it (confirmed against
+        -- mason-registry's packages/zls/package.yaml) -- added to the
+        -- Main.hs headless MasonInstall list alongside shellcheck below,
+        -- for the same reason shellcheck needs to be there: a headless
+        -- `+qa` provisioning run never fires the FileType/BufReadPre event
+        -- this table's own auto-install is gated behind.
+        zls = {},
       },
       setup = {
         clangd = function(_, server_opts)

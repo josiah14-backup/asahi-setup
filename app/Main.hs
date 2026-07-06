@@ -16,6 +16,23 @@
 -- install it by hand if you want it: `sudo dnf install -y rkhunter`, then
 -- follow the prompts.
 --
+-- installHaskellToolchain's ghcup bootstrap (BOOTSTRAP_HASKELL_INSTALL_HLS=1)
+-- fetches ghcup's precompiled aarch64 HLS binary, which was confirmed live
+-- on this exact machine to crash on startup with "GHC ABIs don't match!" --
+-- ghcup's aarch64 HLS bindist for 2.14.0.0 was built in ghcup's own CI
+-- against a GHC 9.10.3 snapshot with different exact library hashes than
+-- the GHC 9.10.3 ghcup separately installs locally, despite matching
+-- version numbers (a known class of gotcha on the newer, less mature
+-- aarch64 Haskell toolchain, consistent with other ARM64-specific issues
+-- already hit throughout this file). The real fix, confirmed to actually
+-- resolve it, is building HLS from source against the exact local GHC:
+-- `ghcup compile hls --version 2.14.0.0 --ghc 9.10.3` -- but that's a
+-- genuine 20-40+ minute compile, a poor fit for baking unconditionally
+-- into every provisioning run (including machines where the prebuilt
+-- binary works fine, e.g. x86_64), and it may simply be fixed upstream by
+-- the time ghcup ships a later HLS/GHC pairing. Run that command by hand
+-- if `lsp-haskell`/Doom's `(haskell +lsp)` crashes with the same error.
+--
 -- widevine-installer (the dnf package, installed below) only lays down
 -- the dnf/Firefox/Chromium config plumbing -- the actual Widevine CDM
 -- binary (needed for DRM-gated content like Spotify's/Netflix's web
@@ -853,6 +870,37 @@ installHackNerdFont = do
       shells "fc-cache -f" empty
       echo "Installed Hack Nerd Font to ~/.local/share/fonts/HackNerdFont."
 
+-- | A different, separate font pack from Hack Nerd Font above: Doom's
+-- `nerd-icons` package (file-type icons in dired/treemacs/dashboard/
+-- modeline) specifically wants nerd-fonts' own minimal "Symbols Nerd Font
+-- Mono" glyphs-only pack, not a patched programming font -- confirmed
+-- live via `doom doctor`, which explicitly names this exact font and
+-- suggests either `M-x nerd-icons-install-fonts` (interactive, inside
+-- Emacs) or a manual OS-package install. Fetched the same way as
+-- installHackNerdFont above (same v3.4.0 release tag, confirmed real
+-- asset name via the GitHub releases API: NerdFontsSymbolsOnly.zip)
+-- rather than relying on the interactive Emacs command, so this stays
+-- scriptable like every other font install in this file.
+installSymbolsNerdFont :: IO ()
+installSymbolsNerdFont = do
+  homeDir <- home
+  let fontDir = homeDir </> ".local/share/fonts/SymbolsNerdFont"
+  alreadyExists <- testdir fontDir
+  if alreadyExists
+    then echo "~/.local/share/fonts/SymbolsNerdFont already present, leaving it untouched."
+    else do
+      mktree fontDir
+      curdir <- pwd
+      cd fontDir
+      shells
+        "curl -fsSL -o NerdFontsSymbolsOnly.zip https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/NerdFontsSymbolsOnly.zip \
+        \&& unzip -oq NerdFontsSymbolsOnly.zip \
+        \&& rm NerdFontsSymbolsOnly.zip"
+        empty
+      cd curdir
+      shells "fc-cache -f" empty
+      echo "Installed Symbols Nerd Font to ~/.local/share/fonts/SymbolsNerdFont (Doom's nerd-icons)."
+
 -- | No ~/.config/nvim existed at all on this machine, same starting
 -- point as writeNeovideConfig above -- this is LazyVim (the closest
 -- real analog to Doom Emacs for Neovim: a curated, lazy-loaded plugin
@@ -891,11 +939,14 @@ writeNvimConfig = do
       -- current platform is unsupported"), so they're installed as a
       -- system package (clang-tools-extra) and via `nix profile`
       -- (installNixfmt) instead, and just need to be on PATH, which
-      -- nvim-lspconfig/conform.nvim don't care how they got there.
+      -- nvim-lspconfig/conform.nvim don't care how they got there. zls
+      -- IS available on Mason for aarch64 (confirmed directly against
+      -- mason-registry's packages/zls/package.yaml: a real linux_arm64
+      -- asset exists), unlike clangd/nixfmt -- added here for that reason.
       shells
-        "nvim --headless -c \"MasonInstall stylua shfmt bash-language-server shellcheck rust-analyzer nil pyright taplo json-lsp fish-lsp statix\" -c \"sleep 60\" -c \"qa\""
+        "nvim --headless -c \"MasonInstall stylua shfmt bash-language-server shellcheck rust-analyzer nil pyright taplo json-lsp fish-lsp statix zls\" -c \"sleep 60\" -c \"qa\""
         empty
-      echo "Bootstrapped LazyVim's plugins and Mason tools (stylua, shfmt, bash-language-server, shellcheck, rust-analyzer, nil, pyright, taplo, json-lsp, fish-lsp, statix)."
+      echo "Bootstrapped LazyVim's plugins and Mason tools (stylua, shfmt, bash-language-server, shellcheck, rust-analyzer, nil, pyright, taplo, json-lsp, fish-lsp, statix, zls)."
 
 writeLibrespotSystemdService :: IO ()
 writeLibrespotSystemdService = do
@@ -1672,6 +1723,280 @@ writeEmacsInitEl = do
       cp (curdir </> "emacs/init.el") initPath
       echo "Wrote ~/.config/emacs/init.el (gc-cons-threshold/percentage tuning)."
 
+-- | Copies this repo's doom/ directory to ~/.config/doom, same pattern as
+-- writeNvimConfig's `cp -r nvim ~/.config/nvim`.
+writeDoomConfig :: IO ()
+writeDoomConfig = do
+  curdir <- pwd
+  homeDir <- home
+  let configDir = homeDir </> ".config/doom"
+  alreadyExists <- testdir configDir
+  if alreadyExists
+    then echo "~/.config/doom already present, leaving it untouched."
+    else do
+      shells ("cp -r " <> format fp (curdir </> "doom") <> " " <> format fp configDir) empty
+      echo "Wrote ~/.config/doom (Doom Emacs private config)."
+
+-- | Moves the existing plain (vanilla-init.el-only) ~/.config/emacs aside
+-- rather than clobbering it, clones doomemacs/core fresh into ~/.config/emacs
+-- (doomemacs/doomemacs redirects there now -- cloning the current canonical
+-- name directly), and runs the non-interactive install+sync sequence.
+-- Idempotent on the presence of ~/.config/emacs/bin/doom (Doom's own CLI),
+-- not on ~/.config/emacs itself, since the latter already exists from
+-- installEmacsFromSource.
+installDoomEmacs :: IO ()
+installDoomEmacs = do
+  homeDir <- home
+  let emacsDir = homeDir </> ".config/emacs"
+      doomBin = emacsDir </> "bin/doom"
+      backupDir = homeDir </> ".config/emacs.pre-doom-backup"
+  alreadyInstalled <- testfile doomBin
+  if alreadyInstalled
+    then echo "Doom Emacs already installed at ~/.config/emacs/bin/doom."
+    else do
+      vanillaEmacsDirExists <- testdir emacsDir
+      backupAlreadyExists <- testdir backupDir
+      if vanillaEmacsDirExists && not backupAlreadyExists
+        then do
+          shells ("mv " <> format fp emacsDir <> " " <> format fp backupDir) empty
+          echo "Moved existing ~/.config/emacs (vanilla init.el) aside to ~/.config/emacs.pre-doom-backup."
+        else return ()
+      shells ("git clone https://github.com/doomemacs/core " <> format fp emacsDir) empty
+      -- --force (-!) suppresses interactive prompts; DOOMDIR files already
+      -- exist from writeDoomConfig above, so the "create dummy files" step
+      -- inside `doom install` silently no-ops. `doom install`'s own logic
+      -- runs `git submodule update -f --init --recursive` internally,
+      -- populating the separate doomemacs/modules submodule -- no
+      -- --recurse-submodules needed on the clone itself.
+      shells (format fp doomBin <> " install --force --no-hooks") empty
+      -- `--aot`: ahead-of-time native-compile packages (explicit ask;
+      -- Doom stopped doing this by default a while back). `--env`:
+      -- (re)generate the envvar file Doom loads at startup, capturing this
+      -- shell's PATH (~/.ghcup/bin, ~/.cargo/bin, raco's bin dir, etc.) so
+      -- a Hyprland/fuzzel-launched Emacs still finds these LSP servers --
+      -- same PATH-visibility problem this repo already solved for Mason/
+      -- nvim and qt6ct. A bare `doom env` is dead in this Doom version
+      -- (confirmed directly against bin/doom-env's source, which now
+      -- errors and tells you to run `doom sync --env` instead).
+      shells (format fp doomBin <> " sync --aot --env") empty
+      -- `--gc` is NOT a `doom sync`/`doom install` flag on current Doom --
+      -- confirmed directly against bin/doom's own `defcli-obsolete!`
+      -- table: `doom purge`/`-p` (what `--gc` used to trigger as part of a
+      -- sync on older Doom versions, e.g. the pinned commit docker-emacs's
+      -- own Haskell/systems-ide images still build against) was split into
+      -- a standalone top-level `doom gc` command as of Doom 2.1.0. Calling
+      -- it separately here is the current equivalent of that same intent
+      -- (garbage-collect orphaned packages, compact repos).
+      shells (format fp doomBin <> " gc") empty
+      -- Non-fatal sanity check, deliberately using `shell` (not `shells`):
+      -- confirmed the hard way that `shells` DOES check the exit code and
+      -- throws Turtle's `ShellFailed` on nonzero (this is `shells`'s whole
+      -- purpose -- the earlier comment here claiming it was "intentionally
+      -- unchecked" was simply wrong). `doom doctor` is a diagnostic tool
+      -- that legitimately exits nonzero on cosmetic/optional warnings (a
+      -- missing icon font, an unset optional module dependency, etc.) that
+      -- don't mean the install itself failed -- letting it throw here would
+      -- abort this entire provisioning script partway through, which is
+      -- exactly what happened once already (confirmed live: a `doom doctor`
+      -- warning unrelated to Doom's own health -- Doom's own `:lang go`
+      -- module doctor.el bug, see packages.el's company-go comment -- took
+      -- down the whole run before it ever reached racket-langserver/zig/
+      -- zls/sbcl/quicklisp or anything after them).
+      shell (format fp doomBin <> " doctor") empty
+      echo "Doom Emacs installed, synced (--aot --env), garbage-collected, and doctor-checked."
+
+-- | racket-langserver is a Racket *package* (loaded via `racket -l
+-- racket-langserver`, not a standalone `which`-able binary), so idempotency
+-- is checked via `raco pkg show`'s exit code rather than this file's usual
+-- which-based pattern. Confirmed live: `raco pkg install --dry-run --auto
+-- racket-langserver` resolves fine, pulling straight from
+-- jeapostrophe/racket-langserver on GitHub plus its dependencies
+-- (html-parsing, fixw, profile-flame-graph). Must run after racket itself
+-- is installed (see the dnfInstall "racket" call above).
+installRacketLangserver :: IO ()
+installRacketLangserver =
+  shell "raco pkg show racket-langserver" empty
+    >>= \case
+      ExitSuccess -> echo "racket-langserver already installed."
+      ExitFailure _ -> do
+        shells "raco pkg install --auto racket-langserver" empty
+        echo "Installed racket-langserver (via raco) for Doom's :lang racket +lsp."
+
+-- | Fedora ships a genuine aarch64 zig build (confirmed:
+-- zig-0.16.0-1.fc44.aarch64.rpm in the aarch64 updates repo) -- Zig is not
+-- absent from distro repos the way it once was. Plain dnf install suffices.
+installZig :: IO ()
+installZig =
+  dnfInstall
+    "zig"
+    "zig"
+    "Zig already installed at "
+    "Zig already installed."
+
+-- | zls has no Fedora package (confirmed: packages.fedoraproject.org/pkgs/zls
+-- 404s) -- fetched directly from zigtools/zls's own GitHub release, same
+-- "no clean package, download it" pattern as installHackNerdFont/
+-- papirus-folders. Must run after installZig: reads `zig version` to fetch
+-- the exact matching zls release tag, since zls requires an exact version
+-- match with zig (confirmed both are on 0.16.0 right now, but the two
+-- projects release independently and could drift apart later). Installed
+-- to /usr/local/bin (already on every shell's PATH) rather than left to
+-- Mason: Mason's own zls copy (used by nvim, see writeNvimConfig) lives
+-- under ~/.local/share/nvim/mason/ and is never on the general PATH, so
+-- Doom needs its own independent copy -- the duplication is deliberate.
+installZls :: IO ()
+installZls =
+  which "zls"
+    >>= \case
+      Just zlsLoc ->
+        echoWhichLocation zlsLoc "zls already installed at " "zls already installed."
+      Nothing -> do
+        (_, zigVersionText, _) <- shellStrictWithErr "zig version" empty
+        let zigVersion = strip zigVersionText
+        shells
+          ( "curl -fsSL -o zls.tar.xz https://github.com/zigtools/zls/releases/download/"
+              <> zigVersion
+              <> "/zls-aarch64-linux.tar.xz \
+                 \&& tar xf zls.tar.xz \
+                 \&& chmod +x zls \
+                 \&& sudo mv zls /usr/local/bin/zls \
+                 \&& rm -f zls.tar.xz README.md LICENSE"
+          )
+          empty
+        echo "Installed zls to /usr/local/bin, matching the installed zig version."
+
+-- | Mirrors installNixfmt's exact `nix profile install` pattern -- nil (the
+-- Nix LSP nvim already uses via Mason) has no Fedora package at all
+-- (confirmed: absent from the aarch64 package listing). Doom's :lang nix
+-- +lsp module needs its own system-wide copy for the same PATH-visibility
+-- reason as zls above -- Mason's copy is nvim-only.
+installNil :: IO ()
+installNil =
+  which "nil"
+    >>= \case
+      Just nilLoc -> echoWhichLocation nilLoc "nil already installed at " "nil already installed."
+      Nothing -> shells "nix profile install nixpkgs#nil" empty
+
+-- | shellcheck IS a real Fedora aarch64 package (confirmed:
+-- ShellCheck-0.11.0-4.fc44.aarch64.rpm) -- Mason's copy (nvim-only) doesn't
+-- help Doom's :checkers syntax module, so install it system-wide too.
+installShellcheckSystemWide :: IO ()
+installShellcheckSystemWide =
+  dnfInstall "shellcheck" "ShellCheck" "shellcheck already installed at " "shellcheck already installed."
+
+-- | rust-analyzer IS a real Fedora aarch64 package (confirmed:
+-- rust-analyzer-1.94.1-1.fc44.aarch64.rpm) -- same Mason-is-nvim-only
+-- reasoning as nil/shellcheck above.
+installRustAnalyzerSystemWide :: IO ()
+installRustAnalyzerSystemWide =
+  dnfInstall "rust-analyzer" "rust-analyzer" "rust-analyzer already installed at " "rust-analyzer already installed."
+
+-- | pyright has NO Fedora package -- confirmed live ("No match for
+-- argument: pyright" from a real `dnf install`, contradicting an earlier,
+-- wrong research claim that it was a real aarch64 noarch package). Its
+-- actual, official distribution channel is npm (Microsoft publishes it
+-- there; the PyPI package is a thin wrapper around the same npm-published
+-- JS), so this uses the same `sudo npm install -g` pattern as
+-- bash-language-server/fish-lsp below -- must run after npm itself is
+-- installed, same ordering constraint as those two.
+installPyrightSystemWide :: IO ()
+installPyrightSystemWide =
+  which "pyright"
+    >>= \case
+      Just loc -> echoWhichLocation loc "pyright already installed at " "pyright already installed."
+      Nothing -> shells "sudo npm install -g pyright" empty
+
+-- | bash-language-server has no Fedora package -- installed via npm, same
+-- `sudo npm install -g` pattern as installBitwardenCli. Must run after npm
+-- itself is installed (the existing `dnfInstall "npm" "nodejs24-npm-bin"`
+-- call).
+installBashLanguageServerSystemWide :: IO ()
+installBashLanguageServerSystemWide =
+  which "bash-language-server"
+    >>= \case
+      Just loc -> echoWhichLocation loc "bash-language-server already installed at " "bash-language-server already installed."
+      Nothing -> shells "sudo npm install -g bash-language-server" empty
+
+-- | fish-lsp: real, published npm package (confirmed via `npm view
+-- fish-lsp bin`, which lists a `fish-lsp` executable) -- needed for
+-- doom/lsp-clients.el's hand-rolled Fish LSP wiring, since Doom's `(sh
+-- +fish)' flag only adds Fish syntax support, not LSP. Same npm pattern
+-- and ordering constraint as bash-language-server above.
+installFishLsp :: IO ()
+installFishLsp =
+  which "fish-lsp"
+    >>= \case
+      Just loc -> echoWhichLocation loc "fish-lsp already installed at " "fish-lsp already installed."
+      Nothing -> shells "sudo npm install -g fish-lsp" empty
+
+-- | taplo (TOML LSP -- needed for doom/lsp-clients.el's hand-rolled TOML
+-- LSP wiring, since Doom has no official :lang toml module at all) has no
+-- real Fedora package (the aarch64 listing's "taplot-*" hit is an
+-- unrelated package, not TOML's taplo) -- installed via cargo (confirmed
+-- real crate via `cargo search taplo` -> "taplo-cli"), same pattern as
+-- librespot/spotify_player/neovide. Must run after installRustLang (needs
+-- ~/.cargo/bin/cargo).
+installTaplo :: IO ()
+installTaplo =
+  which "taplo"
+    >>= \case
+      Just loc -> echoWhichLocation loc "taplo already installed at " "taplo already installed."
+      Nothing -> shells "$HOME/.cargo/bin/cargo install taplo-cli --locked" empty
+
+-- | Only needed so Common Lisp's Sly REPL (Doom's :lang common-lisp module)
+-- can actually launch -- the module's *highlighting* works without it.
+-- Confirmed real Fedora aarch64 package (sbcl-2.6.5-2.fc44.aarch64.rpm).
+installSbcl :: IO ()
+installSbcl =
+  dnfInstall "sbcl" "sbcl" "SBCL already installed at " "SBCL already installed."
+
+-- | C's LSP support (Doom's (cc +lsp), nvim's clangd in lang-full.lua) both
+-- need a real C compiler, not just clangd itself. gcc/make happen to
+-- already land on this machine as a side effect of installEmacsFromSource's
+-- own build-dependency list, but that's an accidental coupling -- C tooling
+-- shouldn't depend on whether Emacs happened to need building from source.
+-- Explicit and idempotent (dnfInstall's own `which` check no-ops if
+-- installEmacsFromSource already pulled these in).
+installCToolchain :: IO ()
+installCToolchain = do
+  dnfInstall "gcc" "gcc" "gcc already installed at " "gcc already installed."
+  dnfInstall "make" "make" "make already installed at " "make already installed."
+
+-- | Doom's `:tools direnv` module (doom/init.el) is enabled but doesn't
+-- install the direnv binary itself -- `doom doctor` confirmed this live
+-- ("Couldn't find direnv executable"). Real Fedora package.
+installDirenv :: IO ()
+installDirenv =
+  dnfInstall "direnv" "direnv" "direnv already installed at " "direnv already installed."
+
+-- | Quicklisp (Common Lisp's de facto package manager) -- needed for
+-- nvim/lua/plugins/common-lisp.lua's Conjure+swank REPL support:
+-- `(ql:quickload :swank)` in a plain `sbcl` session requires Quicklisp to
+-- already be loadable, confirmed directly against Conjure's own
+-- conjure-client-common-lisp-swank.txt doc. `(ql:add-to-init-file)`
+-- registers Quicklisp's autoload in ~/.sbclrc so this works in any future
+-- `sbcl` session without an extra manual `(load ...)` step -- the standard,
+-- documented Quicklisp setup step, not a bespoke addition. NOT needed for
+-- Doom's Sly (Doom's :lang common-lisp module, installSbcl above): Sly
+-- bundles and loads its own slynk server directly, with no Quicklisp
+-- dependency at all. Must run after installSbcl (needs the `sbcl` binary).
+installQuicklisp :: IO ()
+installQuicklisp = do
+  homeDir <- home
+  let quicklispDir = homeDir </> "quicklisp"
+  alreadyExists <- testdir quicklispDir
+  if alreadyExists
+    then echo "~/quicklisp already present, leaving it untouched."
+    else do
+      shells
+        "curl -fsSL -o /tmp/quicklisp.lisp https://beta.quicklisp.org/quicklisp.lisp \
+        \&& sbcl --non-interactive --load /tmp/quicklisp.lisp \
+        \--eval '(quicklisp-quickstart:install)' \
+        \--eval '(ql:add-to-init-file)' \
+        \&& rm -f /tmp/quicklisp.lisp"
+        empty
+      echo "Installed Quicklisp to ~/quicklisp and registered its autoload in ~/.sbclrc."
+
 main :: IO ()
 main = do
   shell "sudo dnf upgrade --refresh -y" empty
@@ -1960,6 +2285,18 @@ main = do
     "racket"
     "Racket already installed at "
     "Racket already installed."
+  writeDoomConfig
+  installDoomEmacs
+  installRacketLangserver
+  installZig
+  installZls
+  installNil
+  installShellcheckSystemWide
+  installRustAnalyzerSystemWide
+  installCToolchain
+  installDirenv
+  installSbcl
+  installQuicklisp
   dnfInstall
     "rclone"
     "rclone"
@@ -2075,9 +2412,11 @@ main = do
     "fd already installed."
   installRustLang
   installJuliaup
+  installTaplo
   installSpotifyConnectReceiver
   installNeovide
   installHackNerdFont
+  installSymbolsNerdFont
   -- guile30, so LazyVim's Guile Scheme REPL support (Conjure, nvim/
   -- below) has an actual Guile runtime to connect to. Fedora's guile30
   -- package provides the `guile3.0` binary, not a plain `guile` symlink
@@ -2131,6 +2470,9 @@ main = do
     "NPM (via Node 24) already installed at "
     "NPM already installed."
   installBitwardenCli
+  installBashLanguageServerSystemWide
+  installFishLsp
+  installPyrightSystemWide
   dnfInstall
     "nc"
     "netcat"

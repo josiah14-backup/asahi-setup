@@ -53,6 +53,22 @@ return {
   -- that grammar may only fully cover Idris 1 syntax, so leaving both
   -- active is a safe hedge, not an oversight.
   --
+  -- MAINTENANCE INVARIANT: this list must cover every language given a
+  -- real treesitter parser ANYWHERE in this config (this file,
+  -- lang-full.lua's LazyVim extras, lang-data.lua), not just the parsers
+  -- installed by this file alone -- rust/nix/python/sh/toml below are
+  -- proof this is already a cross-file list, not a local one. When adding
+  -- a new treesitter-covered language in any lang-*.lua file, check
+  -- whether vim-polyglot has a same-named pack (grep its own installed
+  -- syntax/ directory directly, don't assume by name -- "cue" and "ion"
+  -- both have deceptive false-friend polyglot files: cuesheet.vim is CD/
+  -- DVD cue sheets, not the CUE config language, and vim-polyglot's own
+  -- "ion" pack is the unrelated Redox OS Ion shell, not Amazon Ion --
+  -- neither needs an entry here because of this) and add it here if so.
+  -- sql/proto/yaml (added alongside lang-data.lua) were found exactly
+  -- this way -- confirmed via vim-polyglot's syntax/{sql,proto,yaml}.vim
+  -- all being real, installed files.
+  --
   -- haskell is deliberately NOT in this disabled list, unlike every
   -- other treesitter-covered language here -- the nvim-treesitter
   -- "haskell" parser has a real memory-corruption bug, confirmed
@@ -84,13 +100,16 @@ return {
         "markdown",
         "nix",
         "ocaml",
+        "proto",
         "python",
         "racket",
         "ruby",
         "rust",
         "sh",
+        "sql",
         "toml",
         "typescript",
+        "yaml",
         "clojure",
         "scala",
         "java",
