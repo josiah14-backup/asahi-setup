@@ -9,13 +9,14 @@
 // hyprland/workspaces, hyprland/window, hyprland/language equivalents
 // built in, used below instead.
 //
-// temperature/memory are left out of the fallback config's module list
-// on purpose: Apple Silicon's thermal sensors don't live at the hwmon
+// temperature is left out of the fallback config's module list on
+// purpose: Apple Silicon's thermal sensors don't live at the hwmon
 // paths the stock temperature module expects (see the cpu module's own
 // comment below for the fuller rundown of what sensor data actually
-// exists on this hardware). cpu usage % is included, since unlike
-// temperature it's computed from /proc/stat rather than needing a
-// hardware sensor.
+// exists on this hardware). cpu and memory usage % are both included,
+// since unlike temperature they're computed from /proc/stat and
+// /proc/meminfo respectively rather than needing a hardware sensor --
+// no Apple Silicon-specific limitation applies to either.
 //
 // power-profiles-daemon *was* left out for the same reason initially --
 // `systemctl is-active power-profiles-daemon` reported inactive -- but
@@ -31,6 +32,10 @@
 // systemd service files) -- tuned-ppd already covers this, so nothing
 // extra needs installing.
 {
+    // Restricted to the built-in panel -- with the external ARZOPA
+    // monitor in the mix, waybar was rendering on both by default.
+    "output": ["eDP-1"],
+
     // 16 (this file's original tuning) was sized for eDP-1's old 2.0x
     // auto-detected scale; bumped to 24 then 32 now that the display's
     // on 1.5x (see hyprland.conf's monitor line) -- less zoom means the
@@ -38,7 +43,7 @@
     "height": 32,
     "spacing": 4,
 
-    "modules-left": ["hyprland/workspaces", "custom/layout", "cpu"],
+    "modules-left": ["hyprland/workspaces", "custom/layout", "cpu", "memory"],
     "modules-center": ["hyprland/window"],
     "modules-right": [
         "idle_inhibitor",
@@ -69,6 +74,14 @@
     "cpu": {
         "interval": 1,
         "format": "{usage}% ",
+        "tooltip": false
+    },
+
+    // Memory usage %, sampled at the same 1s interval as cpu above --
+    // both read from /proc, no hardware sensor involved.
+    "memory": {
+        "interval": 1,
+        "format": "{percentage}% ",
         "tooltip": false
     },
 

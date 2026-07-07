@@ -79,7 +79,8 @@ button {
 #custom-bluetooth,
 #custom-mic,
 #custom-camera,
-#cpu {
+#cpu,
+#memory {
     padding: 0 6px;
     color: #839496;
 }
@@ -142,6 +143,15 @@ button {
     margin: 0 2px;
 }
 
+/* Distinct from #cpu's cyan on purpose -- they sit right next to each
+   other in modules-left, and an identical background would make the
+   two blocks read as one unbroken bar with no visible seam. */
+#memory {
+    background-color: #268bd2;
+    color: #002b36;
+    margin: 0 2px;
+}
+
 /* Font Awesome 6 ships Solid and Regular as separate font files under
    the same family name -- most icon glyphs (battery, backlight,
    pulseaudio, network) only exist in Solid, which Pango only selects at
@@ -156,7 +166,8 @@ button {
 #battery,
 #custom-mic,
 #custom-camera,
-#cpu {
+#cpu,
+#memory {
     font-weight: 900;
 }
 
