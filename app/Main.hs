@@ -521,6 +521,35 @@ installDocker =
         shells "sudo systemctl enable --now docker" empty
         shells "sudo usermod -aG docker $(whoami)" empty
 
+-- | Tailscale ships its own repo file rather than being packaged in
+-- Fedora directly, same shape as installDocker above. `tailscale up`
+-- needs interactive browser auth, so it's deliberately NOT run here --
+-- this only echoes that it's still needed by hand. `tailscale set
+-- --operator` IS run here though, unlike `up`: it's fully
+-- non-interactive (just sudo), and skipping it silently breaks
+-- waybar's custom/tailscale module later -- confirmed via a live
+-- "Access denied: prefs write access denied" on a plain `tailscale
+-- down` while wiring that module up, despite tailscaled.sock's
+-- permissive world-writable socket perms (which only cover read-only
+-- calls like `status`; up/down do their own authorization on top).
+installTailscale :: IO ()
+installTailscale =
+  which "tailscale"
+    >>= \case
+      Just tailscaleLoc ->
+        echoWhichLocation
+          tailscaleLoc
+          "Tailscale already installed at "
+          "Tailscale already installed."
+      Nothing -> do
+        addDnfRepoFile "https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
+        shells "sudo dnf install -y tailscale" empty
+        shells "sudo systemctl enable --now tailscaled" empty
+        shells "sudo tailscale set --operator=$(whoami)" empty
+        echo "Tailscale installed. Run 'sudo tailscale up' once to authenticate \
+             \via browser -- until then waybar's custom/tailscale module will just \
+             \show disconnected."
+
 installTerraform :: IO ()
 installTerraform =
   which "terraform" >>= \case
@@ -2573,6 +2602,7 @@ main = do
   installHyprland
   writeWaybarConfig
   writeCameraToggleSudoers
+  installTailscale
   installHyprlockAndHypridle
   writeHyprlockConfig
   writeHypridleConfig
