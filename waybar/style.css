@@ -79,6 +79,7 @@ button {
 #custom-bluetooth,
 #custom-mic,
 #custom-camera,
+#custom-tailscale,
 #cpu,
 #memory {
     padding: 0 6px;
@@ -137,6 +138,22 @@ button {
     color: #073642;
 }
 
+/* shield-halved (U+F3ED) is a Font Awesome 6 Free Solid glyph, so it IS
+   in the font-weight: 900 rule below. Orange is otherwise-unused among
+   the custom-module pills (blue/violet/magenta are already taken by
+   bluetooth/mic/camera), so it reads as its own distinct block rather
+   than blending into a neighbor. */
+#custom-tailscale {
+    background-color: #cb4b16;
+    color: #002b36;
+    margin: 0 2px;
+}
+
+#custom-tailscale.off {
+    background-color: #586e75;
+    color: #073642;
+}
+
 #cpu {
     background-color: #2aa198;
     color: #002b36;
@@ -166,6 +183,7 @@ button {
 #battery,
 #custom-mic,
 #custom-camera,
+#custom-tailscale,
 #cpu,
 #memory {
     font-weight: 900;
