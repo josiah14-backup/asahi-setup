@@ -1,130 +1,107 @@
 /* Solarized Dark for GTK3/GTK4 apps under Breeze-Dark.
  *
- * This replaces ~/.config/gtk-{3,4}.0/colors.css, which KDE's own
- * kde-gtk-config normally auto-generates from the active Plasma color
- * scheme (via its colorreload-gtk-module + kded "gtkconfig" plugin) --
- * confirmed by finding it already existed, containing Breeze-Dark's
- * stock (non-Solarized) values despite SolarizedDark already being the
- * applied Plasma color scheme. That auto-regeneration isn't firing in
- * this Hyprland session, so this repo manages the file directly instead
- * of depending on it.
+ * Fallback default for ~/.config/gtk-{3,4}.0/colors.css, used only when
+ * that file doesn't exist yet (see writeGtkColorsCss in app/Main.hs).
+ * KDE's own kde-gtk-config auto-generates this file from the active
+ * Plasma color scheme (via its colorreload-gtk-module + kded "gtkconfig"
+ * plugin) -- it wasn't firing in the Hyprland session this was first
+ * written in, which is why this repo carries a copy at all, but it has
+ * since started generating correctly on its own. This file is now kept
+ * in sync with kde-gtk-config's own live output (2026-07-08) rather than
+ * hand-authored via named Solarized aliases -- the host is the source of
+ * truth for these values, not this repo.
  *
  * Uses the same "_breeze"-suffixed color names KDE's own generated
- * colors.css uses (confirmed by reading it before overwriting) -- the
- * theme's own gtk.css (Breeze-Dark's, at
- * /usr/share/themes/Breeze-Dark/gtk-3.0/gtk.css) aliases the canonical
- * unsuffixed GTK names to these, and since this exact
- * only-override-the-_breeze-names pattern is what KDE's own tooling
- * already does successfully, only those names need overriding here too
- * -- no need to also redefine the canonical aliases separately.
+ * colors.css uses -- Breeze-Dark's own gtk.css aliases the canonical
+ * unsuffixed GTK names to these, so only the _breeze names need
+ * overriding, matching what KDE's own tooling does.
  *
  * Deployed identically to both ~/.config/gtk-3.0/colors.css and
- * ~/.config/gtk-4.0/colors.css -- Breeze-Dark's GTK3 and GTK4 themes use
- * an identical set of these names (confirmed via diff).
+ * ~/.config/gtk-4.0/colors.css -- kde-gtk-config generates an identical
+ * file for both (confirmed via diff).
  */
 
-@define-color solarized_base03  #002b36;
-@define-color solarized_base02  #073642;
-@define-color solarized_base01  #586e75;
-@define-color solarized_base0   #839496;
-@define-color solarized_base1   #93a1a1;
-@define-color solarized_base3   #fdf6e3;
-@define-color solarized_yellow  #b58900;
-@define-color solarized_orange  #cb4b16;
-@define-color solarized_red     #dc322f;
-@define-color solarized_violet  #6c71c4;
-@define-color solarized_blue    #268bd2;
-@define-color solarized_green   #859900;
-
-@define-color theme_bg_color_breeze @solarized_base03;
-@define-color theme_unfocused_bg_color_breeze @solarized_base03;
-@define-color theme_fg_color_breeze @solarized_base0;
-@define-color theme_unfocused_fg_color_breeze @solarized_base01;
-@define-color theme_text_color_breeze @solarized_base0;
-@define-color theme_unfocused_text_color_breeze @solarized_base01;
-@define-color theme_base_color_breeze @solarized_base02;
-@define-color theme_unfocused_base_color_breeze @solarized_base02;
-@define-color content_view_bg_breeze @solarized_base02;
-@define-color theme_unfocused_view_bg_color_breeze @solarized_base02;
-@define-color theme_unfocused_view_text_color_breeze @solarized_base01;
-
-@define-color theme_selected_bg_color_breeze @solarized_blue;
-@define-color theme_selected_fg_color_breeze @solarized_base3;
-@define-color theme_hovering_selected_bg_color_breeze @solarized_blue;
-@define-color theme_unfocused_selected_bg_color_breeze rgba(38, 139, 210, 0.5);
-@define-color theme_unfocused_selected_bg_color_alt_breeze @solarized_blue;
-@define-color theme_unfocused_selected_fg_color_breeze @solarized_base3;
-@define-color insensitive_selected_bg_color_breeze rgba(38, 139, 210, 0.35);
-@define-color insensitive_selected_fg_color_breeze rgba(131, 148, 150, 0.35);
-@define-color insensitive_unfocused_selected_bg_color_breeze rgba(38, 139, 210, 0.35);
-@define-color insensitive_unfocused_selected_fg_color_breeze rgba(131, 148, 150, 0.35);
-
-@define-color borders_breeze @solarized_base01;
-@define-color unfocused_borders_breeze @solarized_base01;
-@define-color insensitive_borders_breeze @solarized_base01;
-@define-color unfocused_insensitive_borders_breeze @solarized_base01;
-
-@define-color insensitive_base_color_breeze @solarized_base02;
-@define-color insensitive_base_fg_color_breeze @solarized_base01;
-@define-color insensitive_bg_color_breeze @solarized_base02;
-@define-color insensitive_fg_color_breeze @solarized_base01;
-@define-color insensitive_unfocused_bg_color_breeze @solarized_base02;
-@define-color insensitive_unfocused_fg_color_breeze @solarized_base01;
-
-@define-color theme_titlebar_background_breeze @solarized_base02;
-@define-color theme_titlebar_background_backdrop_breeze @solarized_base02;
-@define-color theme_titlebar_background_light_breeze @solarized_base02;
-@define-color theme_titlebar_foreground_breeze @solarized_base0;
-@define-color theme_titlebar_foreground_backdrop_breeze @solarized_base01;
-@define-color theme_titlebar_foreground_insensitive_breeze @solarized_base01;
-@define-color theme_titlebar_foreground_insensitive_backdrop_breeze @solarized_base01;
-
-@define-color theme_button_background_normal_breeze @solarized_base02;
-@define-color theme_button_background_backdrop_breeze @solarized_base02;
-@define-color theme_button_background_insensitive_breeze @solarized_base02;
-@define-color theme_button_background_backdrop_insensitive_breeze @solarized_base02;
-@define-color theme_button_foreground_normal_breeze @solarized_base0;
-@define-color theme_button_foreground_backdrop_breeze @solarized_base0;
-@define-color theme_button_foreground_insensitive_breeze @solarized_base01;
-@define-color theme_button_foreground_backdrop_insensitive_breeze @solarized_base01;
-@define-color theme_button_foreground_active_breeze @solarized_base3;
-@define-color theme_button_foreground_active_backdrop_breeze @solarized_base3;
-@define-color theme_button_foreground_active_insensitive_breeze @solarized_base1;
-@define-color theme_button_foreground_active_backdrop_insensitive_breeze @solarized_base1;
-@define-color theme_button_decoration_focus_breeze @solarized_blue;
-@define-color theme_button_decoration_focus_backdrop_breeze @solarized_blue;
-@define-color theme_button_decoration_focus_insensitive_breeze rgba(38, 139, 210, 0.35);
-@define-color theme_button_decoration_focus_backdrop_insensitive_breeze rgba(38, 139, 210, 0.35);
-@define-color theme_button_decoration_hover_breeze @solarized_orange;
-@define-color theme_button_decoration_hover_backdrop_breeze @solarized_orange;
-@define-color theme_button_decoration_hover_insensitive_breeze rgba(203, 75, 22, 0.35);
-@define-color theme_button_decoration_hover_backdrop_insensitive_breeze rgba(203, 75, 22, 0.35);
-
-@define-color theme_view_hover_decoration_color_breeze @solarized_orange;
-@define-color theme_view_active_decoration_color_breeze @solarized_blue;
-
-@define-color link_color_breeze @solarized_blue;
-@define-color link_visited_color_breeze @solarized_violet;
-
-@define-color tooltip_background_breeze @solarized_base02;
-@define-color tooltip_border_breeze @solarized_base01;
-@define-color tooltip_text_breeze @solarized_base0;
-
-@define-color error_color_breeze @solarized_red;
-@define-color error_color_backdrop_breeze @solarized_red;
-@define-color error_color_insensitive_breeze rgba(220, 50, 47, 0.5);
-@define-color error_color_insensitive_backdrop_breeze rgba(220, 50, 47, 0.5);
-
-@define-color warning_color_breeze @solarized_yellow;
-@define-color warning_color_backdrop_breeze @solarized_yellow;
-@define-color warning_color_insensitive_breeze rgba(181, 137, 0, 0.5);
-@define-color warning_color_insensitive_backdrop_breeze rgba(181, 137, 0, 0.5);
-
-@define-color success_color_breeze @solarized_green;
-@define-color success_color_backdrop_breeze @solarized_green;
-@define-color success_color_insensitive_breeze rgba(133, 153, 0, 0.5);
-@define-color success_color_insensitive_backdrop_breeze rgba(133, 153, 0, 0.5);
-
-/* Print paper preview left light on purpose -- previews conventionally
-   show actual white/off-white paper regardless of the app's dark theme. */
-@define-color print_paper_backdrop_breeze @solarized_base3;
+@define-color borders_breeze #1a4049;
+@define-color content_view_bg_breeze #002b36;
+@define-color error_color_backdrop_breeze #dc322f;
+@define-color error_color_breeze #dc322f;
+@define-color error_color_insensitive_backdrop_breeze #492b31;
+@define-color error_color_insensitive_breeze #492b31;
+@define-color insensitive_base_color_breeze #002933;
+@define-color insensitive_base_fg_color_breeze #2c4c54;
+@define-color insensitive_bg_color_breeze #002933;
+@define-color insensitive_borders_breeze #09303a;
+@define-color insensitive_fg_color_breeze #2c4c54;
+@define-color insensitive_selected_bg_color_breeze #002933;
+@define-color insensitive_selected_fg_color_breeze #2c4c54;
+@define-color insensitive_unfocused_bg_color_breeze #002933;
+@define-color insensitive_unfocused_fg_color_breeze #2c4c54;
+@define-color insensitive_unfocused_selected_bg_color_breeze #002933;
+@define-color insensitive_unfocused_selected_fg_color_breeze #2c4c54;
+@define-color link_color_breeze #268bd2;
+@define-color link_visited_color_breeze #6c71c4;
+@define-color success_color_backdrop_breeze #859900;
+@define-color success_color_breeze #859900;
+@define-color success_color_insensitive_backdrop_breeze #2c4e21;
+@define-color success_color_insensitive_breeze #2c4e21;
+@define-color theme_base_color_breeze #002b36;
+@define-color theme_bg_color_breeze #002b36;
+@define-color theme_button_background_backdrop_breeze #073642;
+@define-color theme_button_background_backdrop_insensitive_breeze #07333f;
+@define-color theme_button_background_insensitive_breeze #07333f;
+@define-color theme_button_background_normal_breeze #073642;
+@define-color theme_button_decoration_focus_backdrop_breeze #268bd2;
+@define-color theme_button_decoration_focus_backdrop_insensitive_breeze #11506f;
+@define-color theme_button_decoration_focus_breeze #268bd2;
+@define-color theme_button_decoration_focus_insensitive_breeze #11506f;
+@define-color theme_button_decoration_hover_backdrop_breeze #cb4b16;
+@define-color theme_button_decoration_hover_backdrop_insensitive_breeze #483a30;
+@define-color theme_button_decoration_hover_breeze #cb4b16;
+@define-color theme_button_decoration_hover_insensitive_breeze #483a30;
+@define-color theme_button_foreground_active_backdrop_breeze #839496;
+@define-color theme_button_foreground_active_backdrop_insensitive_breeze #2c4c54;
+@define-color theme_button_foreground_active_breeze #002b36;
+@define-color theme_button_foreground_active_insensitive_breeze #2c4c54;
+@define-color theme_button_foreground_backdrop_breeze #839496;
+@define-color theme_button_foreground_backdrop_insensitive_breeze #30535b;
+@define-color theme_button_foreground_insensitive_breeze #30535b;
+@define-color theme_button_foreground_normal_breeze #839496;
+@define-color theme_fg_color_breeze #839496;
+@define-color theme_header_background_backdrop_breeze #002b36;
+@define-color theme_header_background_breeze #002b36;
+@define-color theme_header_background_light_breeze #002b36;
+@define-color theme_header_foreground_backdrop_breeze #839496;
+@define-color theme_header_foreground_breeze #839496;
+@define-color theme_header_foreground_insensitive_backdrop_breeze #839496;
+@define-color theme_header_foreground_insensitive_breeze #839496;
+@define-color theme_hovering_selected_bg_color_breeze #cb4b16;
+@define-color theme_selected_bg_color_breeze #268bd2;
+@define-color theme_selected_fg_color_breeze #002b36;
+@define-color theme_text_color_breeze #839496;
+@define-color theme_titlebar_background_backdrop_breeze #073642;
+@define-color theme_titlebar_background_breeze #002b36;
+@define-color theme_titlebar_background_light_breeze #002b36;
+@define-color theme_titlebar_foreground_backdrop_breeze #586e75;
+@define-color theme_titlebar_foreground_breeze #93a1a1;
+@define-color theme_titlebar_foreground_insensitive_backdrop_breeze #586e75;
+@define-color theme_titlebar_foreground_insensitive_breeze #586e75;
+@define-color theme_unfocused_base_color_breeze #002b36;
+@define-color theme_unfocused_bg_color_breeze #002b36;
+@define-color theme_unfocused_fg_color_breeze #839496;
+@define-color theme_unfocused_selected_bg_color_alt_breeze #0e3e5b;
+@define-color theme_unfocused_selected_bg_color_breeze #0e3e5b;
+@define-color theme_unfocused_selected_fg_color_breeze #839496;
+@define-color theme_unfocused_text_color_breeze #839496;
+@define-color theme_unfocused_view_bg_color_breeze #002933;
+@define-color theme_unfocused_view_text_color_breeze #2c4c54;
+@define-color theme_view_active_decoration_color_breeze #cb4b16;
+@define-color theme_view_hover_decoration_color_breeze #cb4b16;
+@define-color tooltip_background_breeze #073642;
+@define-color tooltip_border_breeze #204953;
+@define-color tooltip_text_breeze #839496;
+@define-color unfocused_borders_breeze #1a4049;
+@define-color unfocused_insensitive_borders_breeze #09303a;
+@define-color warning_color_backdrop_breeze #b58900;
+@define-color warning_color_breeze #b58900;
+@define-color warning_color_insensitive_backdrop_breeze #3c4821;
+@define-color warning_color_insensitive_breeze #3c4821;

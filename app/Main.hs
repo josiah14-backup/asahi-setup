@@ -157,6 +157,17 @@ dnfInstall binName packageName foundPrefix foundErrText =
               die ("ERROR: Could not install " <> pack binName)
       Just loc -> echoWhichLocation loc foundPrefix foundErrText
 
+-- | npm's answer to dnfInstall: skip installing if the binary is already
+-- on PATH, otherwise `sudo npm install -g`. Used for CLI tools with no
+-- Fedora package and no Flathub app; npm itself is expected to already be
+-- installed by the time any of these run.
+npmInstall :: Turtle.FilePath -> Text -> Text -> Line -> IO ()
+npmInstall binName packageName foundPrefix foundErrText =
+  which binName
+    >>= \case
+      Just loc -> echoWhichLocation loc foundPrefix foundErrText
+      Nothing -> shells ("sudo npm install -g " <> packageName) empty
+
 flatpakInstall :: Text -> IO ()
 flatpakInstall applicationId =
   shellStrictWithErr ("flatpak info " <> applicationId) empty
@@ -631,14 +642,7 @@ installProtonVpnCli =
 -- already set up by this point in the script.
 installBitwardenCli :: IO ()
 installBitwardenCli =
-  which "bw"
-    >>= \case
-      Just bwLoc ->
-        echoWhichLocation
-          bwLoc
-          "Bitwarden CLI already installed at "
-          "Bitwarden CLI already installed."
-      Nothing -> shells "sudo npm install -g @bitwarden/cli" empty
+  npmInstall "bw" "@bitwarden/cli" "Bitwarden CLI already installed at " "Bitwarden CLI already installed."
 
 -- | Ice SSB (peppermintos/ice) has no build system beyond Debian's
 -- debian/ packaging, and no RPM equivalent exists. It's a plain Python 3
@@ -1119,11 +1123,20 @@ writeQt6ctConfig = do
             <> "custom_palette=true\n"
             <> "icon_theme=Papirus-Dark\n"
             <> "standard_dialogs=default\n"
-            <> "style=Fusion\n"
+            -- Breeze, not Fusion: qt6ct itself switched its live config to
+            -- Breeze at some point after this was first written (confirmed
+            -- against the live ~/.config/qt6ct/qt6ct.conf), and Breeze
+            -- matches the rest of this repo's KDE/Plasma-integrated look
+            -- better than Qt's generic Fusion style.
+            <> "style=Breeze\n"
             <> "\n"
             <> "[Fonts]\n"
-            <> "fixed=\"Hack,11,-1,5,50,0,0,0,0,0\"\n"
-            <> "general=\"Noto Sans,11,-1,5,50,0,0,0,0,0\"\n"
+            -- The trailing ",0,0,0,0,1" fields and weight 400 (not the old
+            -- 50) match Qt6's current font-string format, confirmed against
+            -- the live file -- qt6ct rewrote both font entries into this
+            -- format itself after this template was first written.
+            <> "fixed=\"Hack,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1\"\n"
+            <> "general=\"Noto Sans,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1\"\n"
         )
       echo "Wrote ~/.config/qt6ct/qt6ct.conf (Solarized Dark, via the same SolarizedDark.colors file Plasma uses)."
 
@@ -1212,38 +1225,47 @@ writeKonsoleSolarizedTheme = do
 -- directly), and GTK has no equivalent to qt6ct's "point at a KDE
 -- .colors file" bridge. KDE's own kde-gtk-config normally auto-generates
 -- ~/.config/gtk-{3,4}.0/colors.css from the active Plasma color scheme
--- (via its colorreload-gtk-module + kded "gtkconfig" plugin), but that
--- wasn't firing in this Hyprland session -- confirmed directly: it still
--- had Breeze-Dark's stock (non-Solarized) values despite SolarizedDark
--- already being the applied Plasma scheme. gtk/colors.css recolors the
--- same "_breeze"-suffixed names KDE's own generated file uses (Breeze's
--- own gtk-3.0/gtk.css aliases the canonical unsuffixed GTK names to
--- these, and only overriding the _breeze names is exactly what KDE's own
--- tooling does, so that's sufficient here too). Deployed identically to
--- both GTK3 and GTK4 config dirs -- Breeze-Dark's GTK3/GTK4 themes use
--- an identical set of these names (confirmed via diff).
+-- (via its colorreload-gtk-module + kded "gtkconfig" plugin); it wasn't
+-- firing in this Hyprland session when this function was first written,
+-- which is why this repo carries its own copy of the file at all. It has
+-- since started firing on its own (confirmed: the live files are now
+-- genuinely Solarized, just expressed as literal hex values under
+-- kde-gtk-config's own naming rather than this repo's named
+-- @solarized_* aliases) -- gtk/colors.css is now only a fallback default
+-- for a fresh machine where kde-gtk-config hasn't generated one yet, kept
+-- in sync with the live host's actual values (host is the source of
+-- truth here, not this repo).
+--
+-- Originally used a content-sniffing check (`isInfixOf "solarized_base03"`)
+-- to tell "already Solarized" apart from "never configured," on the theory
+-- that a file could exist without being the Solarized one this repo
+-- wants. That check silently broke the moment kde-gtk-config started
+-- generating its own literal-hex version, which contains no such marker
+-- string -- read as "not applied" and would have overwritten the live,
+-- correctly-Solarized file with this repo's (different) values.
+-- Downgraded to the same plain existence check every other write*Config
+-- function here already uses: if a file already exists, something put it
+-- there on purpose, so leave it alone regardless of content. Each of
+-- gtk-3.0/gtk-4.0 is checked and written independently now (previously
+-- both were rewritten together whenever either one looked
+-- "not customized," which -- combined with the marker-check bug -- was a
+-- second way this could have clobbered a file that didn't need touching).
 writeGtkColorsCss :: IO ()
 writeGtkColorsCss = do
   curdir <- pwd
   homeDir <- home
-  let gtk3ColorsPath = homeDir </> ".config/gtk-3.0/colors.css"
-      gtk4ColorsPath = homeDir </> ".config/gtk-4.0/colors.css"
-  gtk3AlreadyCustomized <- checkSolarizedNotApplied gtk3ColorsPath
-  gtk4AlreadyCustomized <- checkSolarizedNotApplied gtk4ColorsPath
-  if not gtk3AlreadyCustomized && not gtk4AlreadyCustomized
-    then echo "GTK3/GTK4 colors.css already Solarized, leaving them untouched."
-    else do
-      mktree (homeDir </> ".config/gtk-3.0")
-      mktree (homeDir </> ".config/gtk-4.0")
-      cp (curdir </> "gtk/colors.css") gtk3ColorsPath
-      cp (curdir </> "gtk/colors.css") gtk4ColorsPath
-      echo "Wrote Solarized Dark to ~/.config/gtk-{3,4}.0/colors.css."
+  writeIfMissing curdir (homeDir </> ".config/gtk-3.0") "~/.config/gtk-3.0/colors.css"
+  writeIfMissing curdir (homeDir </> ".config/gtk-4.0") "~/.config/gtk-4.0/colors.css"
   where
-    checkSolarizedNotApplied path = do
-      exists <- testfile path
-      if not exists
-        then return True
-        else not . isInfixOf (pack "solarized_base03") <$> strict (input path)
+    writeIfMissing curdir configDir label = do
+      let path = configDir </> "colors.css"
+      alreadyExists <- testfile path
+      if alreadyExists
+        then echo (label <> " already present, leaving it untouched.")
+        else do
+          mktree configDir
+          cp (curdir </> "gtk/colors.css") path
+          echo ("Wrote Solarized Dark to " <> label <> ".")
 
 -- | GTK's own icon theme setting is separate from kdeglobals' (used by
 -- Qt/KDE apps) -- confirmed directly, it was still breeze-dark despite
@@ -1639,7 +1661,17 @@ writeCameraToggleSudoers = do
   let sudoersPath = "/etc/sudoers.d/asahi-camera-toggle" :: Turtle.FilePath
       tmpPath = "/tmp/asahi-camera-toggle" :: Turtle.FilePath
       rule = "josiah ALL=(root) NOPASSWD: /usr/sbin/modprobe apple_isp, /usr/sbin/rmmod apple_isp\n"
-  alreadyExists <- testfile sudoersPath
+  -- `testfile` stats as the invoking user; /etc/sudoers.d is root:root
+  -- drwxr-x--- (confirmed directly), so josiah can't even look inside it
+  -- and testfile always silently reports "does not exist" regardless of
+  -- the real state -- meaning this guard did nothing and the rule was
+  -- being reinstalled unconditionally on every run. `sudo test -f`
+  -- elevates first, so it actually reflects reality.
+  alreadyExists <-
+    shell ("sudo test -f " <> format fp sudoersPath) empty
+      >>= \case
+        ExitSuccess -> return True
+        ExitFailure _ -> return False
   if alreadyExists
     then echo "/etc/sudoers.d/asahi-camera-toggle already present, leaving it untouched."
     else do
@@ -1738,6 +1770,15 @@ installEmacsFromSource =
 -- tuning actually asked for -- see that file's own header comment) to
 -- ~/.config/emacs/init.el, same pattern as writeKxkbrcKeyRemaps and
 -- writeHyprlandConfig above.
+--
+-- Currently unreachable on this machine: its only caller,
+-- installEmacsFromSource, only invokes it from the branch taken when
+-- `which "emacs"` finds nothing, and Emacs is already installed here --
+-- so this hasn't run, and won't run again, unless Emacs is uninstalled
+-- first. Not dead code to remove, just confirmed dormant (and confirmed
+-- harmless if it ever did fire: Doom Emacs's own install backed the
+-- original ~/.config/emacs up to ~/.config/emacs.pre-doom-backup/, whose
+-- init.el is byte-identical to this repo's emacs/init.el anyway).
 writeEmacsInitEl :: IO ()
 writeEmacsInitEl = do
   curdir <- pwd
@@ -1930,10 +1971,7 @@ installRustAnalyzerSystemWide =
 -- installed, same ordering constraint as those two.
 installPyrightSystemWide :: IO ()
 installPyrightSystemWide =
-  which "pyright"
-    >>= \case
-      Just loc -> echoWhichLocation loc "pyright already installed at " "pyright already installed."
-      Nothing -> shells "sudo npm install -g pyright" empty
+  npmInstall "pyright" "pyright" "pyright already installed at " "pyright already installed."
 
 -- | bash-language-server has no Fedora package -- installed via npm, same
 -- `sudo npm install -g` pattern as installBitwardenCli. Must run after npm
@@ -1941,10 +1979,7 @@ installPyrightSystemWide =
 -- call).
 installBashLanguageServerSystemWide :: IO ()
 installBashLanguageServerSystemWide =
-  which "bash-language-server"
-    >>= \case
-      Just loc -> echoWhichLocation loc "bash-language-server already installed at " "bash-language-server already installed."
-      Nothing -> shells "sudo npm install -g bash-language-server" empty
+  npmInstall "bash-language-server" "bash-language-server" "bash-language-server already installed at " "bash-language-server already installed."
 
 -- | fish-lsp: real, published npm package (confirmed via `npm view
 -- fish-lsp bin`, which lists a `fish-lsp` executable) -- needed for
@@ -1953,10 +1988,43 @@ installBashLanguageServerSystemWide =
 -- and ordering constraint as bash-language-server above.
 installFishLsp :: IO ()
 installFishLsp =
-  which "fish-lsp"
+  npmInstall "fish-lsp" "fish-lsp" "fish-lsp already installed at " "fish-lsp already installed."
+
+-- | Claude Code has no Fedora package; Anthropic publishes it to npm
+-- (@anthropic-ai/claude-code), same `sudo npm install -g` pattern as
+-- bitwarden-cli/pyright/bash-language-server/fish-lsp above -- must run
+-- after npm itself is installed. Needed on the host itself (not just
+-- inside a faradai container) for non-containerized use and for setting up
+-- credentials that faradai then mounts in.
+installClaudeCode :: IO ()
+installClaudeCode =
+  npmInstall "claude" "@anthropic-ai/claude-code" "Claude Code already installed at " "Claude Code already installed."
+
+-- | OpenCode has no Fedora package. Confirmed via `npm view opencode-ai`
+-- that the published npm package declares `cpu: [arm64, x64]` and ships a
+-- real `opencode-linux-arm64` optional binary dependency, so it's known-
+-- good on this aarch64 machine. The project (now under anomalyco/opencode,
+-- renamed from sst/opencode) also offers a curl installer and a Homebrew
+-- tap, but npm fits this script's existing CLI-tool pattern -- same as
+-- pyright/bash-language-server/fish-lsp/Claude Code above.
+installOpenCodeCli :: IO ()
+installOpenCodeCli =
+  npmInstall "opencode" "opencode-ai" "OpenCode already installed at " "OpenCode already installed."
+
+-- | aider has no Fedora package. Unlike the plain `pip install` used for
+-- powerline-status below, aider pulls in a large, fast-moving dependency
+-- tree, and Fedora's system Python is externally managed (PEP 668) -- so
+-- this installs pipx (Fedora's own python3-pipx package) first and uses
+-- `pipx install`, aider's own officially documented install method. pipx
+-- isolates aider in its own venv instead of fighting the externally-
+-- managed-environment guard or polluting system site-packages. Must run
+-- after the python3/pip dnfInstall calls in main.
+installAiderCli :: IO ()
+installAiderCli =
+  which "aider"
     >>= \case
-      Just loc -> echoWhichLocation loc "fish-lsp already installed at " "fish-lsp already installed."
-      Nothing -> shells "sudo npm install -g fish-lsp" empty
+      Just loc -> echoWhichLocation loc "aider already installed at " "aider already installed."
+      Nothing -> shells "pipx install aider-chat" empty
 
 -- | taplo (TOML LSP -- needed for doom/lsp-clients.el's hand-rolled TOML
 -- LSP wiring, since Doom has no official :lang toml module at all) has no
@@ -2502,6 +2570,8 @@ main = do
   installBashLanguageServerSystemWide
   installFishLsp
   installPyrightSystemWide
+  installClaudeCode
+  installOpenCodeCli
   dnfInstall
     "nc"
     "netcat"
@@ -2529,6 +2599,12 @@ main = do
     "python3-poetry"
     "Poetry package manager for Python already installed at "
     "Poetry package manager for Python already installed."
+  dnfInstall
+    "pipx"
+    "pipx"
+    "pipx already installed at "
+    "pipx already installed."
+  installAiderCli
   installPyenv
   installOhMyZshPlugins
   installPowerline
