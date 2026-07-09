@@ -75,7 +75,6 @@ button {
 #battery,
 #clock,
 #tray,
-#custom-layout,
 #custom-bluetooth,
 #custom-mic,
 #custom-camera,
@@ -84,12 +83,6 @@ button {
 #memory {
     padding: 0 6px;
     color: #839496;
-}
-
-#custom-layout {
-    background-color: #073642;
-    color: #93a1a1;
-    margin: 0 2px;
 }
 
 /* bluetooth-b (U+F294) is a Font Awesome 6 Brands glyph, not Free Solid
