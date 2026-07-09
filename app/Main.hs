@@ -359,18 +359,42 @@ installOhMyZshPlugins = do
 -- pyenv-installer curl script, to match this repo's own git-clone
 -- convention for similar tools above), plus the dnf packages pyenv's own
 -- wiki lists as required to build Pythons from source later.
+--
+-- The build-deps dnf install runs unconditionally, outside the
+-- pyenv-already-cloned check below -- confirmed directly this matters:
+-- on this exact machine, ~/.pyenv already existed (cloned by hand before
+-- this script ever ran), so when this used to live inside the
+-- clone-only branch, the build deps were silently never installed. Later
+-- building a real Python through pyenv (installAiderPython) then
+-- succeeded but silently produced an interpreter missing the readline
+-- extension (`ModuleNotFoundError: No module named 'readline'`) --
+-- confirmed the package (`readline-devel-8.3-4.fc44`) was simply never
+-- installed, not a naming/repo problem. dnf installs are already
+-- individually idempotent (no-op if present), so running this every time
+-- costs nothing when everything's already there.
+--
+-- tk-devel deliberately dropped from pyenv's usual suggested list:
+-- confirmed live it conflicts with tk8-devel (Tk 9 vs Tk 8, mutually
+-- exclusive package generations), which is already installed here as a
+-- dependency of blt-devel (the plain `dnf install -y blt-devel` call
+-- elsewhere in this file, unrelated to Python). tk-devel only enables
+-- CPython's optional tkinter module; skipping it
+-- just means configure quietly omits _tkinter (same graceful-degradation
+-- shape as the readline case above), which nothing here needs -- aider
+-- and everything else built through pyenv on this machine are terminal
+-- tools, not Tk GUIs.
 installPyenv :: IO ()
 installPyenv = do
+  shells
+    "sudo dnf install -y make gcc zlib-devel bzip2 bzip2-devel \
+    \readline-devel sqlite sqlite-devel openssl-devel \
+    \libffi-devel xz-devel ncurses-devel"
+    empty
   pyenvRoot <- fmap (</> ".pyenv") home
   pyenvInstalled <- testpath pyenvRoot
   if pyenvInstalled
     then echo "pyenv already installed."
     else do
-      shells
-        "sudo dnf install -y make gcc zlib-devel bzip2 bzip2-devel \
-        \readline-devel sqlite sqlite-devel openssl-devel tk-devel \
-        \libffi-devel xz-devel ncurses-devel"
-        empty
       shells "git clone https://github.com/pyenv/pyenv.git ~/.pyenv" empty
       echo "Installed pyenv into ~/.pyenv."
 
@@ -2011,20 +2035,68 @@ installOpenCodeCli :: IO ()
 installOpenCodeCli =
   npmInstall "opencode" "opencode-ai" "OpenCode already installed at " "OpenCode already installed."
 
--- | aider has no Fedora package. Unlike the plain `pip install` used for
--- powerline-status below, aider pulls in a large, fast-moving dependency
--- tree, and Fedora's system Python is externally managed (PEP 668) -- so
--- this installs pipx (Fedora's own python3-pipx package) first and uses
--- `pipx install`, aider's own officially documented install method. pipx
--- isolates aider in its own venv instead of fighting the externally-
--- managed-environment guard or polluting system site-packages. Must run
--- after the python3/pip dnfInstall calls in main.
+-- | aider-chat hard-requires Python <3.13 (`requires_python: <3.13,>=3.10`,
+-- confirmed via PyPI's own metadata for 0.86.2, still the latest release
+-- as of this writing despite being from 2026-02-12 -- aider pins its own
+-- numpy/scipy dependencies to exact versions rather than ranges, an
+-- unusually strict policy, so it can't just pick up whatever numpy has
+-- wheels for a newer Python; its own pin has to be bumped first). Fedora
+-- 44 ships only Python 3.14 system-wide (confirmed: no 3.10/3.11/3.12/3.13
+-- package exists at all) -- installing aider against it isn't just a
+-- missing-wheel inconvenience, aider's own metadata refuses anything
+-- >=3.13 outright. `pipx install aider-chat` under the system Python
+-- attempts to satisfy aider's hard-pinned `numpy==1.26.4` (which has no
+-- cp313/cp314 wheels, confirmed via PyPI's file listing for that exact
+-- version) by building it from source, which then fails on its own
+-- (`BackendUnavailable: Cannot import 'setuptools.build_meta'`) --
+-- confirmed live, this is not a hypothetical failure mode.
+--
+-- installAiderPython below builds a dedicated, aider-supported
+-- interpreter via pyenv (needs installPyenv to have already run) rather
+-- than touching the system Python at all; this then installs aider
+-- against that interpreter specifically via `pipx install --python`.
 installAiderCli :: IO ()
 installAiderCli =
   which "aider"
     >>= \case
       Just loc -> echoWhichLocation loc "aider already installed at " "aider already installed."
-      Nothing -> shells "pipx install aider-chat" empty
+      Nothing -> do
+        homeDir <- home
+        let aiderPython = homeDir </> ".pyenv/versions/3.12.13/bin/python"
+        aiderPythonText <-
+          either
+            (const (die "Could not decode aider's pyenv Python interpreter path as UTF-8"))
+            return
+            (toText aiderPython)
+        shells ("pipx install --python " <> aiderPythonText <> " aider-chat") empty
+
+-- | Builds the dedicated Python interpreter installAiderCli above installs
+-- aider-chat against, via pyenv (must run after installPyenv, which only
+-- installs the pyenv tool itself, not any Python version through it).
+-- 3.12.13 is the newest 3.12.x pyenv currently has a build definition
+-- for (confirmed against pyenv's own python-build definitions) -- squarely
+-- inside aider's supported <3.13,>=3.10 range, and 3.12 (unlike 3.13/3.14)
+-- has real upstream numpy 1.26.4 wheels, so this never needs to build
+-- numpy from source either.
+installAiderPython :: IO ()
+installAiderPython = do
+  pyenvRoot <- fmap (</> ".pyenv") home
+  -- Checking for the versioned directory alone isn't enough -- confirmed
+  -- directly: an interrupted `pyenv install` (this one got killed by an
+  -- overly short timeout during a manual test run) leaves that directory
+  -- behind with empty bin/lib subdirectories and no actual python
+  -- binary, which a plain testpath on the directory would misread as
+  -- "already installed" and skip forever. Testing for the interpreter
+  -- binary itself is the same fix class as writeGtkColorsCss/
+  -- writeCameraToggleSudoers above: check the thing that actually matters,
+  -- not a proxy for it.
+  let pythonBin = pyenvRoot </> "versions/3.12.13/bin/python"
+  pythonInstalled <- testfile pythonBin
+  if pythonInstalled
+    then echo "Python 3.12.13 (for aider, via pyenv) already installed."
+    else do
+      shells "PYENV_ROOT=\"$HOME/.pyenv\" \"$HOME/.pyenv/bin/pyenv\" install --force 3.12.13" empty
+      echo "Installed Python 3.12.13 via pyenv (aider-chat requires <3.13; Fedora 44's system Python is 3.14)."
 
 -- | taplo (TOML LSP -- needed for doom/lsp-clients.el's hand-rolled TOML
 -- LSP wiring, since Doom has no official :lang toml module at all) has no
@@ -2604,8 +2676,9 @@ main = do
     "pipx"
     "pipx already installed at "
     "pipx already installed."
-  installAiderCli
   installPyenv
+  installAiderPython
+  installAiderCli
   installOhMyZshPlugins
   installPowerline
   copyDotFilesToHome
