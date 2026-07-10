@@ -2035,6 +2035,15 @@ installOpenCodeCli :: IO ()
 installOpenCodeCli =
   npmInstall "opencode" "opencode-ai" "OpenCode already installed at " "OpenCode already installed."
 
+-- | Codex has no Fedora package. Confirmed via `npm view @openai/codex
+-- optionalDependencies` that the published npm package ships a real
+-- `@openai/codex-linux-arm64` optional binary dependency, so it's known-
+-- good on this aarch64 machine. Same npm pattern as
+-- pyright/bash-language-server/fish-lsp/Claude Code/OpenCode above.
+installCodexCli :: IO ()
+installCodexCli =
+  npmInstall "codex" "@openai/codex" "Codex already installed at " "Codex already installed."
+
 -- | aider-chat hard-requires Python <3.13 (`requires_python: <3.13,>=3.10`,
 -- confirmed via PyPI's own metadata for 0.86.2, still the latest release
 -- as of this writing despite being from 2026-02-12 -- aider pins its own
@@ -2644,6 +2653,7 @@ main = do
   installPyrightSystemWide
   installClaudeCode
   installOpenCodeCli
+  installCodexCli
   dnfInstall
     "nc"
     "netcat"
