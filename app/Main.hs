@@ -168,6 +168,25 @@ npmInstall binName packageName foundPrefix foundErrText =
       Just loc -> echoWhichLocation loc foundPrefix foundErrText
       Nothing -> shells ("sudo npm install -g " <> packageName) empty
 
+-- | curl-and-move-to-/usr/local/bin's answer to dnfInstall/npmInstall:
+-- skip installing if the binary is already on PATH, otherwise download
+-- the given URL directly to binName, chmod it executable, and move it
+-- into /usr/local/bin. Used for CLI tools with no Fedora package, no
+-- Flathub app, and no npm package (single-binary release artifacts
+-- published straight to GitHub Releases). curlFlags is a separate field
+-- rather than hardcoded, since not every one of these needs the same
+-- flags (papirus-folders' own upstream install instructions specifically
+-- call for -fsSL, unlike the plain -L used elsewhere here).
+installCurlBinary :: Text -> Text -> Text -> Text -> Line -> IO ()
+installCurlBinary binName curlFlags downloadUrl foundPrefix foundErrText =
+  which (fromText binName)
+    >>= \case
+      Just loc -> echoWhichLocation loc foundPrefix foundErrText
+      Nothing ->
+        shells ("curl " <> curlFlags <> " " <> downloadUrl <> " -o " <> binName) empty
+          >> chmod executable (fromText ("./" <> binName))
+          >> shells ("sudo mv ./" <> binName <> " /usr/local/bin/" <> binName) empty
+
 flatpakInstall :: Text -> IO ()
 flatpakInstall applicationId =
   shellStrictWithErr ("flatpak info " <> applicationId) empty
@@ -306,50 +325,40 @@ installOhMyZsh =
 installOhMyZshPlugins :: IO ()
 installOhMyZshPlugins = do
   zshCustomPluginsDir <- fmap (</> ".oh-my-zsh/custom/plugins") home
+  mapM_
+    (installOhMyZshPlugin zshCustomPluginsDir)
+    [ ( "zsh-autosuggestions"
+      , "https://github.com/zsh-users/zsh-autosuggestions"
+      , "Zsh-Autosuggestions already installed"
+      )
+    , ( "zsh-syntax-highlighting"
+      , "https://github.com/zsh-users/zsh-syntax-highlighting.git"
+      , "Zsh-Syntax-Highlighting already installed."
+      )
+    , ( "nix-zsh-completions"
+      , "https://github.com/nix-community/nix-zsh-completions.git"
+      , "Nix-Zsh-Completions already installed."
+      )
+    , ( "nix-shell"
+      , "https://github.com/chisui/zsh-nix-shell.git"
+      , "Nix-Shell ZSH plugin already installed."
+      )
+    ]
 
-  zshAutosuggestionsInstalled <-
-    testpath
-      ( zshCustomPluginsDir </> "zsh-autosuggestions" )
-  if not zshAutosuggestionsInstalled then
-    shells
-      "git clone https://github.com/zsh-users/zsh-autosuggestions \
-      \ ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
-      empty
-  else
-    echo "Zsh-Autosuggestions already installed"
-
-  zshSyntaxHighlightingInstalled <-
-    testpath
-      ( zshCustomPluginsDir </> "zsh-syntax-highlighting" )
-  if not zshSyntaxHighlightingInstalled then
-    shells
-      "git clone https://github.com/zsh-users/zsh-syntax-highlighting.git \
-      \ ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
-      empty
-  else
-    echo "Zsh-Syntax-Highlighting already installed."
-
-  nixZshCompletionsInstalled <-
-    testpath
-      ( zshCustomPluginsDir </> "nix-zsh-completions" )
-  if not nixZshCompletionsInstalled then
-    shells
-      "git clone https://github.com/nix-community/nix-zsh-completions.git \
-      \ ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/nix-zsh-completions"
-      empty
-  else
-    echo "Nix-Zsh-Completions already installed."
-
-  nixShellInstalled <-
-    testpath
-      ( zshCustomPluginsDir </> "nix-shell" )
-  if not nixShellInstalled then
-    shells
-      "git clone https://github.com/chisui/zsh-nix-shell.git \
-      \ ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/nix-shell"
-      empty
-  else
-    echo "Nix-Shell ZSH plugin already installed."
+-- | dirName doubles as both the ~/.oh-my-zsh/custom/plugins subdirectory
+-- (checked directly against pluginsDir) and the last path segment of the
+-- $ZSH_CUSTOM-relative clone destination below -- true for all four
+-- plugins today, including zsh-nix-shell, which clones into a "nix-shell"
+-- dir despite the repo itself being named zsh-nix-shell.
+installOhMyZshPlugin :: Turtle.FilePath -> (Text, Text, Text) -> IO ()
+installOhMyZshPlugin pluginsDir (dirName, url, alreadyInstalledMsg) = do
+  installed <- testpath (pluginsDir </> fromText dirName)
+  if installed
+    then echoText alreadyInstalledMsg
+    else
+      shells
+        ("git clone " <> url <> " ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/" <> dirName)
+        empty
 
 -- | .zshrc (line ~161) unconditionally runs `eval "$(pyenv init -)"` and
 -- ~100-110 puts $PYENV_ROOT/bin on PATH, but neither this repo nor
@@ -706,20 +715,19 @@ installIceSsb =
 -- remote that publishes precompiled aarch64 builds instead of building
 -- Signal's Electron app from source. See the header comment for the
 -- trust trade-off this involves.
+-- | No outer "is Signal already installed" check here -- that would just
+-- duplicate the `flatpak info` check flatpakInstallFromRemote already
+-- does internally. `remote-add --if-not-exists` is idempotent, so
+-- running it unconditionally before delegating is a no-op on repeat runs.
 installSignal :: IO ()
 installSignal =
-  shellStrictWithErr "flatpak info org.signal.Signal" empty
+  shell
+    "flatpak remote-add --user --if-not-exists signal-flatpak \
+    \ https://signalflatpak.github.io/signal/signal.flatpakrepo"
+    empty
     >>= \case
-      (ExitSuccess, stdOutText, stdErrText) ->
-        echoText (stdOutText <> stdErrText)
-      (ExitFailure _, _, _) ->
-        shell
-          "flatpak remote-add --user --if-not-exists signal-flatpak \
-          \ https://signalflatpak.github.io/signal/signal.flatpakrepo"
-          empty
-          >>= \case
-            ExitSuccess -> flatpakInstallFromRemote "signal-flatpak" "org.signal.Signal"
-            ExitFailure _ -> die "ERROR: Could not add the remote 'signal-flatpak'."
+      ExitSuccess -> flatpakInstallFromRemote "signal-flatpak" "org.signal.Signal"
+      ExitFailure _ -> die "ERROR: Could not add the remote 'signal-flatpak'."
 
 -- | No dnf/Flathub package; andirsun/Slacky publishes a native aarch64
 -- RPM directly on GitHub (an Electron wrapper around Slack's own web
@@ -1185,23 +1193,17 @@ installPapirusIconTheme =
 
 -- | papirus-folders (the tool that recolors Papirus's folder icons) has
 -- no Fedora package -- fetched directly from its own GitHub repo and
--- installed to /usr/local/bin, same pattern as kompose/kind/k3d above,
--- so it stays available later if the color ever needs changing again.
+-- installed to /usr/local/bin (via installCurlBinary, shared with
+-- installKompose/installKind/installK3d below), so it stays available
+-- later if the color ever needs changing again.
 installPapirusFolders :: IO ()
 installPapirusFolders =
-  which "papirus-folders"
-    >>= \case
-      Just loc ->
-        echoWhichLocation
-          loc
-          "papirus-folders already installed at "
-          "papirus-folders already installed."
-      Nothing ->
-        shells
-          "curl -fsSL https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-folders/master/papirus-folders -o papirus-folders"
-          empty
-          >> chmod executable "./papirus-folders"
-          >> shells "sudo mv ./papirus-folders /usr/local/bin/papirus-folders" empty
+  installCurlBinary
+    "papirus-folders"
+    "-fsSL"
+    "https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-folders/master/papirus-folders"
+    "papirus-folders already installed at "
+    "papirus-folders already installed."
 
 -- | Sets Papirus-Dark's folder color to orange (Solarized's own accent)
 -- and makes Papirus-Dark the active icon theme for Qt/KDE apps
@@ -1334,18 +1336,12 @@ setGtkIconTheme = do
 -- upstream's own script used.
 installKompose :: IO ()
 installKompose =
-  which "kompose" >>= \case
-    Just komposeLoc ->
-      echoWhichLocation
-        komposeLoc
-        "Kompose already installed at "
-        "Kompose already installed."
-    Nothing ->
-      shells
-        "curl -L https://github.com/kubernetes/kompose/releases/download/v1.38.0/kompose-linux-arm64 -o kompose"
-        empty
-        >> chmod executable "./kompose"
-        >> shells "sudo mv ./kompose /usr/local/bin/kompose" empty
+  installCurlBinary
+    "kompose"
+    "-L"
+    "https://github.com/kubernetes/kompose/releases/download/v1.38.0/kompose-linux-arm64"
+    "Kompose already installed at "
+    "Kompose already installed."
 
 -- | Fedora's own `kind` package DOES exist and was the original plan
 -- here, but its RPM requires "docker-cli or podman-docker" -- and
@@ -1357,18 +1353,12 @@ installKompose =
 -- entirely, same pattern as installKompose above.
 installKind :: IO ()
 installKind =
-  which "kind" >>= \case
-    Just kindLoc ->
-      echoWhichLocation
-        kindLoc
-        "KinD already installed at "
-        "KinD already installed."
-    Nothing ->
-      shells
-        "curl -L https://github.com/kubernetes-sigs/kind/releases/download/v0.32.0/kind-linux-arm64 -o kind"
-        empty
-        >> chmod executable "./kind"
-        >> shells "sudo mv ./kind /usr/local/bin/kind" empty
+  installCurlBinary
+    "kind"
+    "-L"
+    "https://github.com/kubernetes-sigs/kind/releases/download/v0.32.0/kind-linux-arm64"
+    "KinD already installed at "
+    "KinD already installed."
 
 -- | No Fedora package; k3d's GitHub releases publish an aarch64 binary
 -- directly (`k3d-linux-arm64`), same pattern as kompose/kind above. This
@@ -1378,18 +1368,12 @@ installKind =
 -- itself just wraps k3d, which in turn runs k3s clusters inside Docker.
 installK3d :: IO ()
 installK3d =
-  which "k3d" >>= \case
-    Just k3dLoc ->
-      echoWhichLocation
-        k3dLoc
-        "k3d already installed at "
-        "k3d already installed."
-    Nothing ->
-      shells
-        "curl -L https://github.com/k3d-io/k3d/releases/download/v5.9.0/k3d-linux-arm64 -o k3d"
-        empty
-        >> chmod executable "./k3d"
-        >> shells "sudo mv ./k3d /usr/local/bin/k3d" empty
+  installCurlBinary
+    "k3d"
+    "-L"
+    "https://github.com/k3d-io/k3d/releases/download/v5.9.0/k3d-linux-arm64"
+    "k3d already installed at "
+    "k3d already installed."
 
 -- | Switched from tofi (built from source, no Fedora package) to fuzzel
 -- (a plain dnf package on Fedora 44 aarch64) -- fuzzel is the same
@@ -2801,36 +2785,39 @@ main = do
       -- touched. cheese/rhythmbox/Fractal are replaced with their Plasma
       -- equivalents (kamoso/elisa/neochat) rather than dropped, since
       -- those are genuine app-level substitutions, not core shell parts.
-      flatpakInstall "com.bitwarden.desktop"
-        >> flatpakInstall "com.brave.Browser"
-        >> flatpakInstall "com.github.inercia.k3x"
-        >> flatpakInstall "so.libdb.dissent"
-        >> flatpakInstall "com.github.tchx84.Flatseal"
-        >> flatpakInstall "com.jetbrains.PyCharm-Professional"
-        >> flatpakInstall "com.nextcloud.desktopclient.nextcloud"
-        >> flatpakInstall "com.rtosta.zapzap"
-        >> flatpakInstall "com.sublimehq.SublimeText"
-        >> flatpakInstall "im.fluffychat.Fluffychat"
-        >> flatpakInstall "im.riot.Riot"
-        >> flatpakInstall "io.github.ungoogled_software.ungoogled_chromium"
-        >> flatpakInstall "org.chromium.Chromium"
-        >> flatpakInstall "com.github.IsmaelMartinez.teams_for_linux"
-        >> flatpakInstall "io.thp.numptyphysics"
-        >> flatpakInstall "md.obsidian.Obsidian"
-        >> flatpakInstall "net.cozic.joplin_desktop"
-        >> flatpakInstall "org.electrum.electrum"
-        >> flatpakInstall "org.gimp.GIMP"
-        >> flatpakInstall "org.inkscape.Inkscape"
-        >> flatpakInstall "org.kde.elisa"
-        >> flatpakInstall "org.kde.kamoso"
-        >> flatpakInstall "org.kde.neochat"
-        >> flatpakInstall "com.protonvpn.www"
-        >> flatpakInstall "org.mozilla.firefox"
-        >> flatpakInstall "org.musescore.MuseScore"
-        >> flatpakInstall "org.qutebrowser.qutebrowser"
-        >> flatpakInstall "org.remmina.Remmina"
-        >> flatpakInstall "org.telegram.desktop"
-        >> flatpakInstall "com.github.xournalpp.xournalpp"
+      mapM_
+        flatpakInstall
+        [ "com.bitwarden.desktop"
+        , "com.brave.Browser"
+        , "com.github.inercia.k3x"
+        , "so.libdb.dissent"
+        , "com.github.tchx84.Flatseal"
+        , "com.jetbrains.PyCharm-Professional"
+        , "com.nextcloud.desktopclient.nextcloud"
+        , "com.rtosta.zapzap"
+        , "com.sublimehq.SublimeText"
+        , "im.fluffychat.Fluffychat"
+        , "im.riot.Riot"
+        , "io.github.ungoogled_software.ungoogled_chromium"
+        , "org.chromium.Chromium"
+        , "com.github.IsmaelMartinez.teams_for_linux"
+        , "io.thp.numptyphysics"
+        , "md.obsidian.Obsidian"
+        , "net.cozic.joplin_desktop"
+        , "org.electrum.electrum"
+        , "org.gimp.GIMP"
+        , "org.inkscape.Inkscape"
+        , "org.kde.elisa"
+        , "org.kde.kamoso"
+        , "org.kde.neochat"
+        , "com.protonvpn.www"
+        , "org.mozilla.firefox"
+        , "org.musescore.MuseScore"
+        , "org.qutebrowser.qutebrowser"
+        , "org.remmina.Remmina"
+        , "org.telegram.desktop"
+        , "com.github.xournalpp.xournalpp"
+        ]
     ExitFailure _ -> die "Could not add the remote 'flathub'."
   writeDisambiguatedSystemDesktopFiles
   -- No aarch64 Flathub build exists for these two, unlike everything
