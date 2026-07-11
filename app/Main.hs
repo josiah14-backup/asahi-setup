@@ -458,6 +458,15 @@ copyDotFilesToHome = do
   cp (curdir </> ".zprofile") (homedir </> ".zprofile")
   cp (curdir </> ".tmux.conf") (homedir </> ".tmux.conf")
   cp (curdir </> ".gitconfig") (homedir </> ".gitconfig")
+  -- tmux-powerline's default left-side segment order put vcs_branch (git
+  -- branch) last, behind tmux_session_info/hostname/lan_ip/wan_ip; the
+  -- default 60-char status-left-length (a hard cap, unrelated to actual
+  -- terminal width) ran out before vcs_branch finished drawing, so it got
+  -- truncated mid-string every time. This override moves vcs_branch
+  -- earlier and raises the cap. mktree first: unlike the dotfiles above,
+  -- this is the first file ever placed under ~/.config/tmux-powerline/.
+  mktree (homedir </> ".config/tmux-powerline")
+  cp (curdir </> "tmux-powerline/config.sh") (homedir </> ".config/tmux-powerline/config.sh")
 
 -- | Firefox, Elisa, Kamoso, and NeoChat are each installed twice on this
 -- machine -- once as a system package, once via the flatpakInstall list
