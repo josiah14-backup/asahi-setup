@@ -129,6 +129,7 @@
 
 module Main where
 
+import Control.Monad (when)
 import qualified Data.Foldable as F (fold)
 import Data.Maybe (fromMaybe)
 import Data.Text (isInfixOf, pack, replace, strip, unpack)
@@ -186,6 +187,43 @@ installCurlBinary binName curlFlags downloadUrl foundPrefix foundErrText =
         shells ("curl " <> curlFlags <> " " <> downloadUrl <> " -o " <> binName) empty
           >> chmod executable (fromText ("./" <> binName))
           >> shells ("sudo mv ./" <> binName <> " /usr/local/bin/" <> binName) empty
+
+-- | Shared "copy a tracked config file into place only if it isn't there
+-- already" pattern behind writeFootConfig/writeNeovideConfig/
+-- writeNixUserConfig/etc. -- leaves any pre-existing file untouched
+-- rather than clobbering something the user (or a prior run) already
+-- customized. Returns whether it actually wrote the file, so callers
+-- needing a one-time follow-up action (enabling a systemd unit, applying
+-- a color scheme) can gate on that instead of re-running it every time.
+copyConfigIfAbsent ::
+  Turtle.FilePath -> Turtle.FilePath -> Turtle.FilePath -> Line -> Line -> IO Bool
+copyConfigIfAbsent configDir repoRelPath destPath alreadyPresentMsg wroteMsg = do
+  curdir <- pwd
+  alreadyExists <- testfile destPath
+  if alreadyExists
+    then echo alreadyPresentMsg >> return False
+    else do
+      mktree configDir
+      cp (curdir </> repoRelPath) destPath
+      echo wroteMsg
+      return True
+
+-- | Shared "read current system state, only mutate if the wanted value
+-- isn't already present" pattern behind writeSystemX11KeyboardOptions and
+-- writeNixTrustedUser -- both mutate root-owned system config outside
+-- $HOME, so both need this idempotency check to avoid re-running a sudo
+-- mutation on every provisioning run. buildMutateCmd is a function of the
+-- current state rather than a fixed command, since X11's remap needs to
+-- merge into whatever options already exist rather than overwrite them.
+appendIfMissing :: Text -> Text -> (Text -> Text) -> Line -> Line -> IO ()
+appendIfMissing checkCmd wantedValue buildMutateCmd alreadyMsg doneMsg = do
+  (_, currentStateRaw, _) <- shellStrictWithErr checkCmd empty
+  let currentState = strip currentStateRaw
+  if wantedValue `isInfixOf` currentState
+    then echo alreadyMsg
+    else do
+      shells (buildMutateCmd currentState) empty
+      echo doneMsg
 
 flatpakInstall :: Text -> IO ()
 flatpakInstall applicationId =
@@ -553,6 +591,47 @@ installNixfmt =
           "nixfmt already installed."
       Nothing -> shells "nix profile install nixpkgs#nixfmt" empty
 
+-- | The nix CLI needs ~/.config/nix/nix.conf's experimental-features
+-- (nix-command, flakes, pipe-operators) enabled before any `nix profile`/
+-- `nix flake`/`nix develop` command works -- including installNixfmt just
+-- above. Same check-then-copy pattern as writeFootConfig. This file is
+-- also what nix-smoketest.bats's systems-ide container bind-mounts in
+-- (see docker-emacs/.../systems-ide/run.sh), so it's tracked here rather
+-- than left as undocumented host state.
+writeNixUserConfig :: IO ()
+writeNixUserConfig = do
+  homeDir <- home
+  let configDir = homeDir </> ".config/nix"
+  _ <-
+    copyConfigIfAbsent
+      configDir
+      "nix/nix.conf"
+      (configDir </> "nix.conf")
+      "~/.config/nix/nix.conf already present, leaving it untouched."
+      "Wrote ~/.config/nix/nix.conf (nix-command, flakes, pipe-operators)."
+  return ()
+
+-- | Grants the current user trusted-user status with the nix daemon
+-- (checked via `nix store info`'s Trusted: field) -- a daemon-side
+-- setting distinct from the client-side experimental-features above, so
+-- it lives in /etc/nix/nix.conf (root-only) rather than the per-user
+-- config. Same read-then-append-if-missing pattern as
+-- writeSystemX11KeyboardOptions.
+writeNixTrustedUser :: IO ()
+writeNixTrustedUser = do
+  (_, currentUser, _) <- shellStrictWithErr "whoami" empty
+  let username = strip currentUser
+  appendIfMissing
+    "sudo cat /etc/nix/nix.conf"
+    username
+    ( const
+        ( "echo \"extra-trusted-users = " <> username
+            <> "\" | sudo tee -a /etc/nix/nix.conf && sudo systemctl restart nix-daemon.service"
+        )
+    )
+    "extra-trusted-users already includes this user in /etc/nix/nix.conf."
+    "Added extra-trusted-users to /etc/nix/nix.conf and restarted nix-daemon."
+
 -- | Fedora doesn't auto-start/enable docker.service or add you to the
 -- docker group the way Debian's postinst scripts do, so both are done
 -- explicitly here.
@@ -802,17 +881,16 @@ installSpotifyConnectReceiver = do
 -- resolve to nothing (confirmed directly).
 writeSpotifyPlayerDesktopFile :: IO ()
 writeSpotifyPlayerDesktopFile = do
-  curdir <- pwd
   homeDir <- home
   let appsDir = homeDir </> ".local/share/applications"
-      desktopPath = appsDir </> "spotify_player.desktop"
-  alreadyExists <- testfile desktopPath
-  if alreadyExists
-    then echo "~/.local/share/applications/spotify_player.desktop already present, leaving it untouched."
-    else do
-      mktree appsDir
-      cp (curdir </> "spotify_player.desktop") desktopPath
-      echo "Wrote ~/.local/share/applications/spotify_player.desktop so spotify_player shows up in the launcher."
+  _ <-
+    copyConfigIfAbsent
+      appsDir
+      "spotify_player.desktop"
+      (appsDir </> "spotify_player.desktop")
+      "~/.local/share/applications/spotify_player.desktop already present, leaving it untouched."
+      "Wrote ~/.local/share/applications/spotify_player.desktop so spotify_player shows up in the launcher."
+  return ()
 
 -- | vifm is a TUI with no .desktop file of its own, same gap
 -- spotify_player had -- launches into foot (a lighter terminal than
@@ -822,17 +900,16 @@ writeSpotifyPlayerDesktopFile = do
 -- spotify_player icon lookup had to fall back to a generic one.
 writeVifmDesktopFile :: IO ()
 writeVifmDesktopFile = do
-  curdir <- pwd
   homeDir <- home
   let appsDir = homeDir </> ".local/share/applications"
-      desktopPath = appsDir </> "vifm.desktop"
-  alreadyExists <- testfile desktopPath
-  if alreadyExists
-    then echo "~/.local/share/applications/vifm.desktop already present, leaving it untouched."
-    else do
-      mktree appsDir
-      cp (curdir </> "vifm.desktop") desktopPath
-      echo "Wrote ~/.local/share/applications/vifm.desktop so vifm shows up in the launcher."
+  _ <-
+    copyConfigIfAbsent
+      appsDir
+      "vifm.desktop"
+      (appsDir </> "vifm.desktop")
+      "~/.local/share/applications/vifm.desktop already present, leaving it untouched."
+      "Wrote ~/.local/share/applications/vifm.desktop so vifm shows up in the launcher."
+  return ()
 
 -- | foot is now the default terminal (hypr/hyprland.conf's mod-shift-Return
 -- and mod-e bindings), by request -- Solarized Dark to match, using the
@@ -843,17 +920,16 @@ writeVifmDesktopFile = do
 -- via `man foot.ini`.
 writeFootConfig :: IO ()
 writeFootConfig = do
-  curdir <- pwd
   homeDir <- home
   let configDir = homeDir </> ".config/foot"
-      configPath = configDir </> "foot.ini"
-  alreadyExists <- testfile configPath
-  if alreadyExists
-    then echo "~/.config/foot/foot.ini already present, leaving it untouched."
-    else do
-      mktree configDir
-      cp (curdir </> "foot/foot.ini") configPath
-      echo "Wrote ~/.config/foot/foot.ini (Solarized Dark, Hack 10pt)."
+  _ <-
+    copyConfigIfAbsent
+      configDir
+      "foot/foot.ini"
+      (configDir </> "foot.ini")
+      "~/.config/foot/foot.ini already present, leaving it untouched."
+      "Wrote ~/.config/foot/foot.ini (Solarized Dark, Hack 10pt)."
+  return ()
 
 -- | No dnf/Flathub package (there's a third-party COPR,
 -- chrisbouchard/neovide-nightly, but it's unvetted and not confirmed to
@@ -884,17 +960,16 @@ installNeovide = do
 -- from), confirmed directly rather than assumed.
 writeNeovideDesktopFile :: IO ()
 writeNeovideDesktopFile = do
-  curdir <- pwd
   homeDir <- home
   let appsDir = homeDir </> ".local/share/applications"
-      desktopPath = appsDir </> "neovide.desktop"
-  alreadyExists <- testfile desktopPath
-  if alreadyExists
-    then echo "~/.local/share/applications/neovide.desktop already present, leaving it untouched."
-    else do
-      mktree appsDir
-      cp (curdir </> "neovide.desktop") desktopPath
-      echo "Wrote ~/.local/share/applications/neovide.desktop so Neovide shows up in the launcher."
+  _ <-
+    copyConfigIfAbsent
+      appsDir
+      "neovide.desktop"
+      (appsDir </> "neovide.desktop")
+      "~/.local/share/applications/neovide.desktop already present, leaving it untouched."
+      "Wrote ~/.local/share/applications/neovide.desktop so Neovide shows up in the launcher."
+  return ()
 
 -- | No ~/.config/nvim at all exists on this machine, so Neovide fell
 -- back to its own default font size, which rendered noticeably larger
@@ -903,17 +978,16 @@ writeNeovideDesktopFile = do
 -- confirmed there.
 writeNeovideConfig :: IO ()
 writeNeovideConfig = do
-  curdir <- pwd
   homeDir <- home
   let configDir = homeDir </> ".config/neovide"
-      configPath = configDir </> "config.toml"
-  alreadyExists <- testfile configPath
-  if alreadyExists
-    then echo "~/.config/neovide/config.toml already present, leaving it untouched."
-    else do
-      mktree configDir
-      cp (curdir </> "neovide/config.toml") configPath
-      echo "Wrote ~/.config/neovide/config.toml (Hack Nerd Font, 11pt)."
+  _ <-
+    copyConfigIfAbsent
+      configDir
+      "neovide/config.toml"
+      (configDir </> "config.toml")
+      "~/.config/neovide/config.toml already present, leaving it untouched."
+      "Wrote ~/.config/neovide/config.toml (Hack Nerd Font, 11pt)."
+  return ()
 
 -- | No dnf/Flathub package for Nerd Fonts at all (checked directly --
 -- `dnf list --available "*nerd-fonts*"` returns nothing), so this
@@ -1024,19 +1098,18 @@ writeNvimConfig = do
 
 writeLibrespotSystemdService :: IO ()
 writeLibrespotSystemdService = do
-  curdir <- pwd
   homeDir <- home
   let serviceDir = homeDir </> ".config/systemd/user"
-      servicePath = serviceDir </> "librespot.service"
-  alreadyExists <- testfile servicePath
-  if alreadyExists
-    then echo "~/.config/systemd/user/librespot.service already present, leaving it untouched."
-    else do
-      mktree serviceDir
-      cp (curdir </> "librespot/librespot.service") servicePath
-      shells "systemctl --user daemon-reload" empty
-      shells "systemctl --user enable --now librespot.service" empty
-      echo "librespot running as a systemd --user service; pick \"Librespot (Asahi)\" from Spotify Connect elsewhere."
+  wrote <-
+    copyConfigIfAbsent
+      serviceDir
+      "librespot/librespot.service"
+      (serviceDir </> "librespot.service")
+      "~/.config/systemd/user/librespot.service already present, leaving it untouched."
+      "librespot running as a systemd --user service; pick \"Librespot (Asahi)\" from Spotify Connect elsewhere."
+  when wrote $ do
+    shells "systemctl --user daemon-reload" empty
+    shells "systemctl --user enable --now librespot.service" empty
 
 -- | Two xkb key remaps for the Plasma session: caps:swapescape (swap Caps
 -- Lock/Escape) and ctrl:ralt_rctrl (Right Alt/Option acts as Right
@@ -1051,15 +1124,16 @@ writeLibrespotSystemdService = do
 -- instead, which goes through the path that's actually known to work.
 writeKxkbrcKeyRemaps :: IO ()
 writeKxkbrcKeyRemaps = do
-  curdir <- pwd
   homeDir <- home
-  let kxkbrcPath = homeDir </> ".config/kxkbrc"
-  alreadyExists <- testfile kxkbrcPath
-  if alreadyExists
-    then echo "~/.config/kxkbrc already present, leaving it untouched -- add Options=caps:swapescape,ctrl:ralt_rctrl under [Layout] by hand, or via System Settings, if you still want these remaps."
-    else do
-      cp (curdir </> "plasma/kxkbrc") kxkbrcPath
-      echo "Wrote ~/.config/kxkbrc (caps:swapescape, ctrl:ralt_rctrl). Log out/in for it to take effect; see KDE bug 433265 if it doesn't stick under Wayland."
+  let configDir = homeDir </> ".config"
+  _ <-
+    copyConfigIfAbsent
+      configDir
+      "plasma/kxkbrc"
+      (configDir </> "kxkbrc")
+      "~/.config/kxkbrc already present, leaving it untouched -- add Options=caps:swapescape,ctrl:ralt_rctrl under [Layout] by hand, or via System Settings, if you still want these remaps."
+      "Wrote ~/.config/kxkbrc (caps:swapescape, ctrl:ralt_rctrl). Log out/in for it to take effect; see KDE bug 433265 if it doesn't stick under Wayland."
+  return ()
 
 -- | ~/.config/kxkbrc's Options alone turned out not to be enough on this
 -- machine -- confirmed directly: this Plasma Wayland session's KWin
@@ -1075,22 +1149,19 @@ writeKxkbrcKeyRemaps = do
 -- this doesn't clobber the existing terminate:ctrl_alt_bksp (or whatever
 -- else may be set) on a fresh machine's own defaults.
 writeSystemX11KeyboardOptions :: IO ()
-writeSystemX11KeyboardOptions = do
-  (_, currentOptionsLine, _) <-
-    shellStrictWithErr "localectl status | grep 'X11 Options:' | sed 's/.*: //'" empty
-  let currentOptions = strip currentOptionsLine
-      wantedOptions = "caps:swapescape,ctrl:ralt_rctrl"
-  if wantedOptions `isInfixOf` currentOptions
-    then echo "System-wide X11 keyboard options already include the caps/ctrl remaps."
-    else do
-      let combinedOptions =
-            if currentOptions == ""
-              then wantedOptions
-              else currentOptions <> "," <> wantedOptions
-      shells
-        ("sudo localectl set-x11-keymap us pc105 dvorak \"" <> combinedOptions <> "\"")
-        empty
-      echo "Set system-wide X11 keyboard options (caps:swapescape, ctrl:ralt_rctrl) via localectl -- log out/in for KWin to pick it up (a live reconfigure signal isn't enough)."
+writeSystemX11KeyboardOptions =
+  appendIfMissing
+    "localectl status | grep 'X11 Options:' | sed 's/.*: //'"
+    "caps:swapescape,ctrl:ralt_rctrl"
+    ( \currentOptions ->
+        let combinedOptions =
+              if currentOptions == ""
+                then "caps:swapescape,ctrl:ralt_rctrl"
+                else currentOptions <> ",caps:swapescape,ctrl:ralt_rctrl"
+         in "sudo localectl set-x11-keymap us pc105 dvorak \"" <> combinedOptions <> "\""
+    )
+    "System-wide X11 keyboard options already include the caps/ctrl remaps."
+    "Set system-wide X11 keyboard options (caps:swapescape, ctrl:ralt_rctrl) via localectl -- log out/in for KWin to pick it up (a live reconfigure signal isn't enough)."
 
 -- | Solarized Dark KDE color scheme, applied via `plasma-apply-colorscheme`
 -- (a real Plasma tool, no sudo needed) for the Plasma session, and
@@ -1099,18 +1170,18 @@ writeSystemX11KeyboardOptions = do
 -- avoiding maintaining two separate palettes for the two sessions.
 writePlasmaColorScheme :: IO ()
 writePlasmaColorScheme = do
-  curdir <- pwd
   homeDir <- home
   let schemesDir = homeDir </> ".local/share/color-schemes"
-      schemePath = schemesDir </> "SolarizedDark.colors"
-  alreadyExists <- testfile schemePath
-  if alreadyExists
-    then echo "~/.local/share/color-schemes/SolarizedDark.colors already present, leaving it untouched."
-    else do
-      mktree schemesDir
-      cp (curdir </> "plasma/SolarizedDark.colors") schemePath
-      shells "plasma-apply-colorscheme SolarizedDark" empty
-      echo "Wrote and applied the SolarizedDark Plasma color scheme."
+  wrote <-
+    copyConfigIfAbsent
+      schemesDir
+      "plasma/SolarizedDark.colors"
+      (schemesDir </> "SolarizedDark.colors")
+      "~/.local/share/color-schemes/SolarizedDark.colors already present, leaving it untouched."
+      "Wrote ~/.local/share/color-schemes/SolarizedDark.colors."
+  when wrote $ do
+    shells "plasma-apply-colorscheme SolarizedDark" empty
+    echo "Applied the SolarizedDark Plasma color scheme."
 
 -- | Qt/KDE apps' default font resolution (Dolphin, System Settings,
 -- etc. under a real Plasma session) rendered noticeably larger than
@@ -1287,20 +1358,19 @@ writeKonsoleSolarizedTheme = do
 -- second way this could have clobbered a file that didn't need touching).
 writeGtkColorsCss :: IO ()
 writeGtkColorsCss = do
-  curdir <- pwd
   homeDir <- home
-  writeIfMissing curdir (homeDir </> ".config/gtk-3.0") "~/.config/gtk-3.0/colors.css"
-  writeIfMissing curdir (homeDir </> ".config/gtk-4.0") "~/.config/gtk-4.0/colors.css"
+  writeOne (homeDir </> ".config/gtk-3.0") "~/.config/gtk-3.0/colors.css"
+  writeOne (homeDir </> ".config/gtk-4.0") "~/.config/gtk-4.0/colors.css"
   where
-    writeIfMissing curdir configDir label = do
-      let path = configDir </> "colors.css"
-      alreadyExists <- testfile path
-      if alreadyExists
-        then echo (label <> " already present, leaving it untouched.")
-        else do
-          mktree configDir
-          cp (curdir </> "gtk/colors.css") path
-          echo ("Wrote Solarized Dark to " <> label <> ".")
+    writeOne configDir label = do
+      _ <-
+        copyConfigIfAbsent
+          configDir
+          "gtk/colors.css"
+          (configDir </> "colors.css")
+          (fromMaybe "already present, leaving it untouched." (textToLine (label <> " already present, leaving it untouched.")))
+          (fromMaybe "Wrote config." (textToLine ("Wrote Solarized Dark to " <> label <> ".")))
+      return ()
 
 -- | GTK's own icon theme setting is separate from kdeglobals' (used by
 -- Qt/KDE apps) -- confirmed directly, it was still breeze-dark despite
@@ -1396,16 +1466,16 @@ installFuzzel =
 -- header comment for the exact mapping.
 writeFuzzelConfig :: IO ()
 writeFuzzelConfig = do
-  curdir <- pwd
   homeDir <- home
   let configDir = homeDir </> ".config/fuzzel"
-  alreadyExists <- testfile (configDir </> "fuzzel.ini")
-  if alreadyExists
-    then echo "~/.config/fuzzel/fuzzel.ini already present, leaving it untouched."
-    else do
-      mktree configDir
-      cp (curdir </> "fuzzel/fuzzel.ini") (configDir </> "fuzzel.ini")
-      echo "Wrote ~/.config/fuzzel/fuzzel.ini (Solarized Dark)."
+  _ <-
+    copyConfigIfAbsent
+      configDir
+      "fuzzel/fuzzel.ini"
+      (configDir </> "fuzzel.ini")
+      "~/.config/fuzzel/fuzzel.ini already present, leaving it untouched."
+      "Wrote ~/.config/fuzzel/fuzzel.ini (Solarized Dark)."
+  return ()
 
 -- | Same solopasha/hyprland COPR as installHyprland below -- these close
 -- a gap hyprland.conf used to document explicitly ("mod-shift-l screen
@@ -1432,29 +1502,29 @@ installHyprlockAndHypridle = do
 -- subdirectories.
 writeHyprlockConfig :: IO ()
 writeHyprlockConfig = do
-  curdir <- pwd
   homeDir <- home
   let configDir = homeDir </> ".config/hypr"
-  alreadyExists <- testfile (configDir </> "hyprlock.conf")
-  if alreadyExists
-    then echo "~/.config/hypr/hyprlock.conf already present, leaving it untouched."
-    else do
-      mktree configDir
-      cp (curdir </> "hypr/hyprlock.conf") (configDir </> "hyprlock.conf")
-      echo "Wrote ~/.config/hypr/hyprlock.conf (Solarized Dark)."
+  _ <-
+    copyConfigIfAbsent
+      configDir
+      "hypr/hyprlock.conf"
+      (configDir </> "hyprlock.conf")
+      "~/.config/hypr/hyprlock.conf already present, leaving it untouched."
+      "Wrote ~/.config/hypr/hyprlock.conf (Solarized Dark)."
+  return ()
 
 writeHypridleConfig :: IO ()
 writeHypridleConfig = do
-  curdir <- pwd
   homeDir <- home
   let configDir = homeDir </> ".config/hypr"
-  alreadyExists <- testfile (configDir </> "hypridle.conf")
-  if alreadyExists
-    then echo "~/.config/hypr/hypridle.conf already present, leaving it untouched."
-    else do
-      mktree configDir
-      cp (curdir </> "hypr/hypridle.conf") (configDir </> "hypridle.conf")
-      echo "Wrote ~/.config/hypr/hypridle.conf."
+  _ <-
+    copyConfigIfAbsent
+      configDir
+      "hypr/hypridle.conf"
+      (configDir </> "hypridle.conf")
+      "~/.config/hypr/hypridle.conf already present, leaving it untouched."
+      "Wrote ~/.config/hypr/hypridle.conf."
+  return ()
 
 -- | Hyprland ships no wallpaper support of its own -- that's explicitly
 -- out of compositor scope, delegated to a separate client. hyprpaper is
@@ -1798,17 +1868,16 @@ installEmacsFromSource =
 -- init.el is byte-identical to this repo's emacs/init.el anyway).
 writeEmacsInitEl :: IO ()
 writeEmacsInitEl = do
-  curdir <- pwd
   homeDir <- home
   let configDir = homeDir </> ".config/emacs"
-      initPath = configDir </> "init.el"
-  alreadyExists <- testfile initPath
-  if alreadyExists
-    then echo "~/.config/emacs/init.el already present, leaving it untouched."
-    else do
-      mktree configDir
-      cp (curdir </> "emacs/init.el") initPath
-      echo "Wrote ~/.config/emacs/init.el (gc-cons-threshold/percentage tuning)."
+  _ <-
+    copyConfigIfAbsent
+      configDir
+      "emacs/init.el"
+      (configDir </> "init.el")
+      "~/.config/emacs/init.el already present, leaving it untouched."
+      "Wrote ~/.config/emacs/init.el (gc-cons-threshold/percentage tuning)."
+  return ()
 
 -- | Copies this repo's doom/ directory to ~/.config/doom, same pattern as
 -- writeNvimConfig's `cp -r nvim ~/.config/nvim`.
@@ -2723,6 +2792,8 @@ main = do
         \&& sudo restorecon -Rv /nix/var/nix/daemon-socket"
         empty
       shells "sudo systemctl enable --now nix-daemon.socket" empty
+  writeNixUserConfig
+  writeNixTrustedUser
   installNixfmt
   installDocker
   dnfInstall
