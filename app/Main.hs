@@ -169,6 +169,20 @@ npmInstall binName packageName foundPrefix foundErrText =
       Just loc -> echoWhichLocation loc foundPrefix foundErrText
       Nothing -> shells ("sudo npm install -g " <> packageName) empty
 
+-- | cargo's answer to dnfInstall/npmInstall: skip installing if the binary
+-- is already on PATH, otherwise `cargo install <cargoArgs>`. cargoArgs is
+-- everything after "cargo install " verbatim, so this covers both a plain
+-- crate name (e.g. "taplo-cli --locked") and a git-based install with no
+-- crates.io package (e.g. "--git https://github.com/rtk-ai/rtk") without
+-- needing a second helper. Must run after installRustLang (needs
+-- ~/.cargo/bin/cargo).
+cargoInstall :: Turtle.FilePath -> Text -> Text -> Line -> IO ()
+cargoInstall binName cargoArgs foundPrefix foundErrText =
+  which binName
+    >>= \case
+      Just loc -> echoWhichLocation loc foundPrefix foundErrText
+      Nothing -> shells ("$HOME/.cargo/bin/cargo install " <> cargoArgs) empty
+
 -- | curl-and-move-to-/usr/local/bin's answer to dnfInstall/npmInstall:
 -- skip installing if the binary is already on PATH, otherwise download
 -- the given URL directly to binName, chmod it executable, and move it
@@ -843,30 +857,14 @@ installSlacky =
 installSpotifyConnectReceiver :: IO ()
 installSpotifyConnectReceiver = do
   shells "sudo dnf install -y alsa-lib-devel openssl-devel dbus-devel" empty
-  which "librespot"
-    >>= \case
-      Just librespotLoc ->
-        echoWhichLocation
-          librespotLoc
-          "librespot already installed at "
-          "librespot already installed."
-      Nothing -> do
-        shells "$HOME/.cargo/bin/cargo install librespot --locked" empty
-        writeLibrespotSystemdService
+  cargoInstall "librespot" "librespot --locked" "librespot already installed at " "librespot already installed."
+  writeLibrespotSystemdService
   -- `cargo install spotify_player` (matching the crate name) is what
   -- actually lands on disk as the binary name -- confirmed directly via
   -- `cargo install --list` -- not "spotify-player" with a hyphen (the
   -- name this used to check for here, which meant `which` could never
   -- find it and this step always re-ran cargo install unnecessarily).
-  which "spotify_player"
-    >>= \case
-      Just playerLoc ->
-        echoWhichLocation
-          playerLoc
-          "spotify_player already installed at "
-          "spotify_player already installed."
-      Nothing ->
-        shells "$HOME/.cargo/bin/cargo install spotify_player --locked" empty
+  cargoInstall "spotify_player" "spotify_player --locked" "spotify_player already installed at " "spotify_player already installed."
   writeSpotifyPlayerDesktopFile
 
 -- | spotify_player is a TUI with no .desktop file anywhere on the
@@ -941,15 +939,7 @@ writeFootConfig = do
 installNeovide :: IO ()
 installNeovide = do
   shells "sudo dnf install -y fontconfig-devel" empty
-  which "neovide"
-    >>= \case
-      Just neovideLoc ->
-        echoWhichLocation
-          neovideLoc
-          "Neovide already installed at "
-          "Neovide already installed."
-      Nothing ->
-        shells "$HOME/.cargo/bin/cargo install neovide --locked" empty
+  cargoInstall "neovide" "neovide --locked" "Neovide already installed at " "Neovide already installed."
   writeNeovideDesktopFile
   writeNeovideConfig
 
@@ -2178,10 +2168,17 @@ installAiderPython = do
 -- ~/.cargo/bin/cargo).
 installTaplo :: IO ()
 installTaplo =
-  which "taplo"
-    >>= \case
-      Just loc -> echoWhichLocation loc "taplo already installed at " "taplo already installed."
-      Nothing -> shells "$HOME/.cargo/bin/cargo install taplo-cli --locked" empty
+  cargoInstall "taplo" "taplo-cli --locked" "taplo already installed at " "taplo already installed."
+
+-- | rtk (github.com/rtk-ai/rtk) is a standalone Rust CLI that Claude Code's
+-- hook config (~/.claude/RTK.md) shells out to on every bash command, to cut
+-- token usage on routine dev operations (git status, etc.). Not published to
+-- crates.io under this name, so install straight from its git repo rather
+-- than by package name -- same pattern as librespot/spotify_player/neovide/
+-- taplo above. Must run after installRustLang.
+installRtk :: IO ()
+installRtk =
+  cargoInstall "rtk" "--git https://github.com/rtk-ai/rtk" "rtk already installed at " "rtk already installed."
 
 -- | Only needed so Common Lisp's Sly REPL (Doom's :lang common-lisp module)
 -- can actually launch -- the module's *highlighting* works without it.
@@ -2653,6 +2650,7 @@ main = do
   installRustLang
   installJuliaup
   installTaplo
+  installRtk
   installSpotifyConnectReceiver
   installNeovide
   installHackNerdFont
