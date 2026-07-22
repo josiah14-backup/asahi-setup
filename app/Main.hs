@@ -354,6 +354,50 @@ installJuliaup =
               echoText (stdOutText <> stdErrText)
                 >> die "ERROR: Could not install Julia via juliaup"
 
+-- | No Fedora package for Guix at all, so this uses the official
+-- guix-install.sh script (same distro-agnostic curl-to-shell pattern as
+-- installHaskellToolchain/installJuliaup above), non-interactively via
+-- its own documented `--non-interactive` flag. Unlike those two, this
+-- needs to run as root (guix-install.sh sets up /gnu, /var/guix, a
+-- build-users-group, and a systemd service -- confirmed directly against
+-- the official manual's own installation instructions, which say to run
+-- it as root) -- `sudo sh -s --` rather than a plain `sh -s --`.
+--
+-- The `systemctl enable --now guix-daemon` call is belt-and-suspenders:
+-- guix-install.sh's own docs say it "handles daemon setup" already, but
+-- this project's own installTailscale/installDocker don't rely on a
+-- package's postinst having done this either, and enabling an
+-- already-enabled service is a harmless no-op.
+--
+-- No separate step for Guile itself: Guix is implemented in Guile, so a
+-- working `guile` is already a transitive dependency in the store once
+-- Guix is installed -- confirmed directly in the docker-emacs project's
+-- own guix-source image build (see that project's DECISIONLOG.md), where
+-- it needed a manual symlink since the default profile only exposes
+-- `guix` itself. Whether guix-install.sh's own profile setup already
+-- exposes a bare `guile` on PATH here, or needs the same manual symlink,
+-- is unconfirmed until this actually runs on the host -- check
+-- `which guile` after a run before assuming either way.
+installGuix :: IO ()
+installGuix =
+  which "guix"
+    >>= \case
+      Just guixLoc ->
+        echoWhichLocation
+          guixLoc
+          "Guix already installed at "
+          "Guix already installed."
+      Nothing ->
+        shellStrictWithErr "sudo sh -s -- --non-interactive" (inshell "curl -fsSL https://guix.gnu.org/guix-install.sh" empty)
+          >>= \case
+            (ExitSuccess, stdOutText, stdErrText) ->
+              echoText (stdOutText <> stdErrText)
+                >> shells "sudo systemctl enable --now guix-daemon" empty
+                >> echo "Guix installed; guix-daemon enabled."
+            (ExitFailure _, stdOutText, stdErrText) ->
+              echoText (stdOutText <> stdErrText)
+                >> die "ERROR: Could not install Guix via guix-install.sh"
+
 installOhMyZsh :: IO ()
 installOhMyZsh =
   (home >>= testpath . flip (</>) ".oh-my-zsh")
@@ -2649,6 +2693,7 @@ main = do
     "fd already installed."
   installRustLang
   installJuliaup
+  installGuix
   installTaplo
   installRtk
   installSpotifyConnectReceiver
