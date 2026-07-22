@@ -16,18 +16,6 @@
 -- install it by hand if you want it: `sudo dnf install -y rkhunter`, then
 -- follow the prompts.
 --
--- Guix's own guix-install.sh is the same story -- no Fedora package, and
--- its real install run asks up to six genuine yes/no questions (signing-
--- key trust, daemon autostart, substitute downloads, shell-prompt
--- customization, SELinux/AppArmor policies), at least one of which
--- (shell-prompt customization) isn't safe to blanket-answer given this
--- project's own careful dotfile management. Confirmed directly against
--- the script's actual current source that no non-interactive flag exists
--- at all (a `--non-interactive` flag some secondhand docs claimed does
--- not exist in the real script). Run by hand:
--- `curl -fsSL https://guix.gnu.org/guix-install.sh | sudo sh` -- see
--- installGuix's own comment for the full reasoning.
---
 -- installHaskellToolchain's ghcup bootstrap (BOOTSTRAP_HASKELL_INSTALL_HLS=1)
 -- fetches ghcup's precompiled aarch64 HLS binary, which was confirmed live
 -- on this exact machine to crash on startup with "GHC ABIs don't match!" --
@@ -394,6 +382,42 @@ installJuliaup =
 -- `guile` ends up on PATH automatically or needs the same manual symlink
 -- docker-emacs's own guix-source image needed (see that project's
 -- DECISIONLOG.md) -- unconfirmed until this actually runs.
+-- | The official guix-install.sh is genuinely interactive (six real
+-- yes/no questions -- see the reasoning this replaced, still worth
+-- reading in git history) and has no non-interactive flag at all
+-- (confirmed directly against its actual source). Sidesteps that
+-- entirely by mirroring docker-emacs's own `guix-source` Dockerfile
+-- instead: download the official binary tarball directly (checksum-
+-- pinned, same GUIX_VERSION as that project) and extract it -- no
+-- installer script, no prompts, because there's nothing to ask.
+--
+-- Guix is itself implemented in Guile, so a full Guile closure is
+-- already a transitive dependency of the `guix` package sitting in the
+-- store right after extraction -- confirmed directly in docker-emacs's
+-- own build (see that project's DECISIONLOG.md); it's just not
+-- symlinked into `guix`'s own profile `bin/` by default, hence the
+-- manual symlink discovery below instead of a `guix install guile`
+-- step (which would need a live daemon just to get `guile` on PATH at
+-- all).
+--
+-- The daemon itself -- needed afterward for any *new* `guix install`
+-- the user runs by hand, not for anything above -- is wired up the
+-- same way the official installer's own `systemd` code path does it
+-- (confirmed directly against guix-install.sh's `install_unit`
+-- function): the unit file ships *inside* Guix's own profile at
+-- `lib/systemd/system/guix-daemon.service`, so there's no unit file to
+-- author here, just copy the one Guix already ships. `guixbuild` +
+-- 10 unprivileged `guixbuilder*` users is Guix's own documented
+-- `--build-users-group` setup, already verified working this same
+-- session (docker-emacs's Phase 3, `entrypoint.sh`).
+--
+-- Not yet end-to-end tested on an actual fresh machine (this host
+-- already has Guix from the earlier interactive install, so this
+-- code path won't run here) -- built from two independently-verified
+-- sources (guix-source's own tarball/symlink logic, guix-install.sh's
+-- own systemd-unit logic) rather than from a fresh live test. Confirm
+-- `guix --version` and `guile --version` after this actually runs on a
+-- new machine before trusting it fully.
 installGuix :: IO ()
 installGuix =
   which "guix"
@@ -403,14 +427,53 @@ installGuix =
           guixLoc
           "Guix already installed at "
           "Guix already installed."
-      Nothing ->
-        echoText
-          "Guix not installed. This installer asks real yes/no questions\n\
-          \(signing-key trust, daemon autostart, substitute downloads, shell-\n\
-          \prompt customization, SELinux/AppArmor policies) that deserve your\n\
-          \own answers rather than a scripted guess -- run by hand:\n\
-          \  curl -fsSL https://guix.gnu.org/guix-install.sh | sudo sh\n\
-          \Then rerun this program; it'll detect Guix and skip this step."
+      Nothing -> do
+        homeDir <- home
+        let guixVersion = "1.5.0" :: Text
+            guixSha256 = "a5d58b1d0294cad6adb1f2aff627d37feb5db763fdffbceb8551f2b12123cf39" :: Text
+        shells
+          ( "set -e \
+            \ && curl -fsSL \"https://ftpmirror.gnu.org/gnu/guix/guix-binary-"
+              <> guixVersion
+              <> ".aarch64-linux.tar.xz\" -o /tmp/guix-binary.tar.xz \
+                 \ && echo \""
+              <> guixSha256
+              <> "  /tmp/guix-binary.tar.xz\" | sha256sum -c - \
+                 \ && mkdir -p /tmp/guix-extract \
+                 \ && tar -C /tmp/guix-extract -xf /tmp/guix-binary.tar.xz \
+                 \ && sudo mkdir -p /gnu /var/guix \
+                 \ && sudo mv /tmp/guix-extract/gnu/store /gnu/store \
+                 \ && sudo mv /tmp/guix-extract/var/guix/* /var/guix/ \
+                 \ && rm -rf /tmp/guix-extract /tmp/guix-binary.tar.xz"
+          )
+          empty
+          >> shells
+            ( "mkdir -p "
+                <> format fp (homeDir </> ".config/guix")
+                <> " "
+                <> format fp (homeDir </> ".local/bin")
+                <> " \
+                   \ && ln -sf /var/guix/profiles/per-user/root/current-guix "
+                <> format fp (homeDir </> ".config/guix/current")
+                <> " \
+                   \ && GUIX_PROFILE=\"$(readlink -f /var/guix/profiles/per-user/root/current-guix)\" \
+                   \ && for bin in guix guix-daemon; do ln -sf \"$GUIX_PROFILE/bin/$bin\" "
+                <> format fp (homeDir </> ".local/bin")
+                <> "/\"$bin\"; done \
+                   \ && GUILE_STORE_DIR=\"$(find /gnu/store -maxdepth 1 -iname '*-guile-3.*' ! -iname '*doc*' -printf '%f\\n' | sort -V | tail -1)\" \
+                   \ && for bin in guile guild guile-config; do ln -sf \"/gnu/store/$GUILE_STORE_DIR/bin/$bin\" "
+                <> format fp (homeDir </> ".local/bin")
+                <> "/\"$bin\"; done \
+                   \ && sudo groupadd --system guixbuild \
+                   \ && for i in $(seq -w 1 10); do sudo useradd -g guixbuild -G guixbuild -d /var/empty -s \"$(which nologin)\" -c \"Guix build user $i\" --system \"guixbuilder$i\" 2>/dev/null || true; done \
+                   \ && GUIX_PROFILE=\"$(readlink -f /var/guix/profiles/per-user/root/current-guix)\" \
+                   \ && sudo cp \"$GUIX_PROFILE/lib/systemd/system/guix-daemon.service\" /etc/systemd/system/guix-daemon.service \
+                   \ && sudo chmod 664 /etc/systemd/system/guix-daemon.service \
+                   \ && sudo systemctl daemon-reload \
+                   \ && sudo systemctl enable --now guix-daemon"
+            )
+            empty
+          >> echo "Guix installed (from the official binary tarball, no interactive prompts); guix-daemon enabled."
 
 installOhMyZsh :: IO ()
 installOhMyZsh =
@@ -1035,6 +1098,28 @@ writeNeovideConfig = do
       (configDir </> "config.toml")
       "~/.config/neovide/config.toml already present, leaving it untouched."
       "Wrote ~/.config/neovide/config.toml (Hack Nerd Font, 11pt)."
+  return ()
+
+-- | vi-mode plus the Guix/Guile-adjacent work done directly on this
+-- machine -- confirmed live before being brought back here, matching
+-- this file's own "copy the config, don't hand-roll it" convention for
+-- every other dotfile. Note in the tracked file itself: `pay-respects`'s
+-- Nushell integration (see installPayRespects below) is deliberately
+-- left commented out -- its generated code doesn't work against the nu
+-- version installed here (confirmed live: a real upstream bug, not a
+-- config mistake), so sourcing it unconditionally would break every
+-- fresh nu session's config load.
+writeNuConfig :: IO ()
+writeNuConfig = do
+  homeDir <- home
+  let configDir = homeDir </> ".config/nushell"
+  _ <-
+    copyConfigIfAbsent
+      configDir
+      "nushell/config.nu"
+      (configDir </> "config.nu")
+      "~/.config/nushell/config.nu already present, leaving it untouched."
+      "Wrote ~/.config/nushell/config.nu (vi-mode enabled)."
   return ()
 
 -- | No dnf/Flathub package for Nerd Fonts at all (checked directly --
@@ -2238,6 +2323,20 @@ installRtk :: IO ()
 installRtk =
   cargoInstall "rtk" "--git https://github.com/rtk-ai/rtk" "rtk already installed at " "rtk already installed."
 
+-- | thefuck's replacement for shells it doesn't support (confirmed
+-- directly: thefuck's own shells/ directory only ships bash/zsh/fish/
+-- powershell/tcsh, no Nushell at all). Published to crates.io under
+-- this name, unlike rtk above. Only the binary is installed here --
+-- its Nushell integration (`pay-respects nu --alias`) is deliberately
+-- NOT wired into nushell/config.nu yet: confirmed live its generated
+-- code calls `history import` with a signature this project's installed
+-- nu version doesn't have, a real open upstream bug (see
+-- writeNuConfig's own comment and nushell/config.nu's commented-out
+-- source line for the full story), not something fixable from this end.
+installPayRespects :: IO ()
+installPayRespects =
+  cargoInstall "pay-respects" "pay-respects --locked" "pay-respects already installed at " "pay-respects already installed."
+
 -- | Only needed so Common Lisp's Sly REPL (Doom's :lang common-lisp module)
 -- can actually launch -- the module's *highlighting* works without it.
 -- Confirmed real Fedora aarch64 package (sbcl-2.6.5-2.fc44.aarch64.rpm).
@@ -2720,6 +2819,7 @@ main = do
   installGuix
   installTaplo
   installRtk
+  installPayRespects
   installSpotifyConnectReceiver
   installNeovide
   installHackNerdFont
@@ -2751,6 +2851,7 @@ main = do
     "nushell"
     "Nushell already installed at "
     "Nushell already installed."
+  writeNuConfig
   -- clangd, for the C-only LSP setup in nvim/lua/plugins/lang-full.lua --
   -- installed as a system package rather than left to Mason, since
   -- Mason's clangd package has no aarch64 Linux build at all (confirmed

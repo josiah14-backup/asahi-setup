@@ -173,6 +173,44 @@ if [ -e $HOME/.nix-profile/etc/profile.d/nix.sh ]; then
   . $HOME/.nix-profile/etc/profile.d/nix.sh
 fi
 
+if [ -e $HOME/.guix-profile/etc/profile ]; then
+  GUIX_PROFILE="$HOME/.guix-profile"
+  . "$GUIX_PROFILE/etc/profile"
+  unset GUIX_PROFILE
+fi
+
+# oh-my-zsh's compinit runs with -i (ignore insecure directories) by default --
+# confirmed directly against lib/compfix.zsh/oh-my-zsh.sh: this already
+# silently skips loading completions only from flagged paths, leaving
+# everything else intact; the printed warning changes nothing on its own.
+# /usr/share/zsh/site-functions/_guix (a symlink into Guix's own profile,
+# owned by the guix-daemon system account -- not root, not this user, which
+# is exactly what the check flags, regardless of permission bits) gets
+# skipped as a result. Loading it manually here, after compinit has already
+# run, sidesteps that one audit gate entirely -- confirmed live -- without
+# touching ZSH_DISABLE_COMPFIX, which would trade this one skipped file for
+# loading *every* insecure completion unconditionally instead.
+if [ -e /var/guix/profiles/per-user/root/current-guix/share/zsh/site-functions/_guix ]; then
+  fpath+=(/var/guix/profiles/per-user/root/current-guix/share/zsh/site-functions)
+  autoload -Uz _guix
+  compdef _guix guix
+fi
+
+# Mirrors what guix-install.sh's own bash prompt customization already
+# added to .bashrc (a "[env]" suffix while inside a live `guix shell`) --
+# zsh wasn't touched by that installer, so this adds the equivalent here.
+# This only needs to run once at .zshrc load time, not on every prompt
+# render: `guix shell` spawns a fresh sub-shell that re-sources .zshrc,
+# the same reason the .bashrc version works as a one-time check too.
+# Appended to RPROMPT rather than hacking the left PROMPT string --
+# avit (this theme) already builds RPROMPT up from contextual segments
+# (git status, vi-mode), so this fits the same pattern instead of a
+# one-off insertion. Swap "(guix-shell)" for "(guix)" below if you'd
+# rather have the shorter form.
+if [ -n "$GUIX_ENVIRONMENT" ]; then
+  RPROMPT="%{$fg[green]%}(guix-shell)%{$reset_color%} ${RPROMPT}"
+fi
+
 # The next line updates PATH for the Google Cloud SDK.
 if [ -f "$HOME/Downloads/google-cloud-sdk/path.zsh.inc" ]; then
   . "$HOME/Downloads/google-cloud-sdk/path.zsh.inc"
