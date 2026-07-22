@@ -16,6 +16,18 @@
 -- install it by hand if you want it: `sudo dnf install -y rkhunter`, then
 -- follow the prompts.
 --
+-- Guix's own guix-install.sh is the same story -- no Fedora package, and
+-- its real install run asks up to six genuine yes/no questions (signing-
+-- key trust, daemon autostart, substitute downloads, shell-prompt
+-- customization, SELinux/AppArmor policies), at least one of which
+-- (shell-prompt customization) isn't safe to blanket-answer given this
+-- project's own careful dotfile management. Confirmed directly against
+-- the script's actual current source that no non-interactive flag exists
+-- at all (a `--non-interactive` flag some secondhand docs claimed does
+-- not exist in the real script). Run by hand:
+-- `curl -fsSL https://guix.gnu.org/guix-install.sh | sudo sh` -- see
+-- installGuix's own comment for the full reasoning.
+--
 -- installHaskellToolchain's ghcup bootstrap (BOOTSTRAP_HASKELL_INSTALL_HLS=1)
 -- fetches ghcup's precompiled aarch64 HLS binary, which was confirmed live
 -- on this exact machine to crash on startup with "GHC ABIs don't match!" --
@@ -354,30 +366,34 @@ installJuliaup =
               echoText (stdOutText <> stdErrText)
                 >> die "ERROR: Could not install Julia via juliaup"
 
--- | No Fedora package for Guix at all, so this uses the official
--- guix-install.sh script (same distro-agnostic curl-to-shell pattern as
--- installHaskellToolchain/installJuliaup above), non-interactively via
--- its own documented `--non-interactive` flag. Unlike those two, this
--- needs to run as root (guix-install.sh sets up /gnu, /var/guix, a
--- build-users-group, and a systemd service -- confirmed directly against
--- the official manual's own installation instructions, which say to run
--- it as root) -- `sudo sh -s --` rather than a plain `sh -s --`.
+-- | No Fedora package for Guix at all, and unlike installHaskellToolchain/
+-- installJuliaup above, guix-install.sh genuinely can't be automated the
+-- same curl-to-shell way -- confirmed directly against its actual current
+-- source (not assumed from secondhand docs, which turned out to describe
+-- a `--non-interactive` flag that doesn't exist: the script's own `main`
+-- only accepts zero arguments or `--uninstall`, full stop). A normal
+-- install run asks up to six real `prompt_yes_no` questions along the
+-- way: trusting the OpenPGP signing key, enabling guix-daemon at boot,
+-- permitting substitute (pre-built binary) downloads, customizing the
+-- shell prompt, and installing an SELinux policy and an AppArmor profile.
+-- Blindly piping `yes ''` at all of them (the common Docker/CI trick,
+-- since every prompt here defaults to yes on a bare newline) would also
+-- say yes to the shell-prompt customization -- this project already
+-- manages that carefully via its own dotfiles (.tmux.conf's powerline
+-- segment ordering, etc.), and SELinux/AppArmor policies for a distro
+-- that may not even enforce either are a bad bet to guess blindly on a
+-- daily-driver machine. Same category of decision as the rkhunter/
+-- widevine-installer entries in this file's own header comment: genuinely
+-- interactive, real consequences per answer, left to be run by hand
+-- rather than scripted past.
 --
--- The `systemctl enable --now guix-daemon` call is belt-and-suspenders:
--- guix-install.sh's own docs say it "handles daemon setup" already, but
--- this project's own installTailscale/installDocker don't rely on a
--- package's postinst having done this either, and enabling an
--- already-enabled service is a harmless no-op.
---
--- No separate step for Guile itself: Guix is implemented in Guile, so a
--- working `guile` is already a transitive dependency in the store once
--- Guix is installed -- confirmed directly in the docker-emacs project's
--- own guix-source image build (see that project's DECISIONLOG.md), where
--- it needed a manual symlink since the default profile only exposes
--- `guix` itself. Whether guix-install.sh's own profile setup already
--- exposes a bare `guile` on PATH here, or needs the same manual symlink,
--- is unconfirmed until this actually runs on the host -- check
--- `which guile` after a run before assuming either way.
+-- Once actually installed, `systemctl enable --now guix-daemon` is still
+-- worth running here regardless (belt-and-suspenders, matching
+-- installTailscale/installDocker's own convention -- a no-op if the
+-- installer's own prompt already enabled it), and note whether a bare
+-- `guile` ends up on PATH automatically or needs the same manual symlink
+-- docker-emacs's own guix-source image needed (see that project's
+-- DECISIONLOG.md) -- unconfirmed until this actually runs.
 installGuix :: IO ()
 installGuix =
   which "guix"
@@ -388,15 +404,13 @@ installGuix =
           "Guix already installed at "
           "Guix already installed."
       Nothing ->
-        shellStrictWithErr "sudo sh -s -- --non-interactive" (inshell "curl -fsSL https://guix.gnu.org/guix-install.sh" empty)
-          >>= \case
-            (ExitSuccess, stdOutText, stdErrText) ->
-              echoText (stdOutText <> stdErrText)
-                >> shells "sudo systemctl enable --now guix-daemon" empty
-                >> echo "Guix installed; guix-daemon enabled."
-            (ExitFailure _, stdOutText, stdErrText) ->
-              echoText (stdOutText <> stdErrText)
-                >> die "ERROR: Could not install Guix via guix-install.sh"
+        echoText
+          "Guix not installed. This installer asks real yes/no questions\n\
+          \(signing-key trust, daemon autostart, substitute downloads, shell-\n\
+          \prompt customization, SELinux/AppArmor policies) that deserve your\n\
+          \own answers rather than a scripted guess -- run by hand:\n\
+          \  curl -fsSL https://guix.gnu.org/guix-install.sh | sudo sh\n\
+          \Then rerun this program; it'll detect Guix and skip this step."
 
 installOhMyZsh :: IO ()
 installOhMyZsh =
