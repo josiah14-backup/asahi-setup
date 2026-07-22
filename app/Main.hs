@@ -2445,6 +2445,16 @@ main = do
     "gh"
     "GitHub CLI already installed at "
     "GitHub CLI already installed."
+  -- A useful system utility in its own right (most GNU tools -- bash,
+  -- gawk, coreutils, gcc, and now Guix -- ship their real manual as
+  -- Texinfo/info pages, not just a man page), not just a Guix
+  -- prerequisite -- Fedora's minimal install doesn't include it by
+  -- default (confirmed directly on this exact machine).
+  dnfInstall
+    "info"
+    "info"
+    "info already installed at "
+    "info already installed."
   -- Plasma's own GTK-consistency stack, replacing gnome-tweaks (System
   -- Settings already covers everything else gnome-tweaks did).
   shells "sudo dnf install -y kde-gtk-config breeze-gtk" empty
