@@ -2274,6 +2274,30 @@ installAiderCli =
             (toText aiderPython)
         shells ("pipx install --python " <> aiderPythonText <> " aider-chat") empty
 
+-- | headroom (github.com/chopratejas/headroom's `headroom-ai` PyPI package,
+-- confirmed via its own wheel metadata's Project-URL) is an LLM-request
+-- compression proxy (Kompress + AST-aware code
+-- compression, via `headroom wrap`) -- confirmed already in use for agents
+-- running inside the FaradAI sandbox (automation-engineering/faradai/
+-- Dockerfile pins this exact package/version/extras), but not previously
+-- installed for agents run straight on the host. This mirrors that same
+-- install here. Unlike aider above, headroom-ai's own wheel metadata
+-- supports Python 3.10 through 3.14 (confirmed via PyPI), so it's fine
+-- against whatever system Python pipx already targets by default -- no
+-- dedicated pyenv interpreter needed. Not the same project as rtk above
+-- (rtk-ai/rtk) despite the similar naming and Claude-Code-tooling role --
+-- confirmed rtk is a standalone Rust binary with its own git repo, not an
+-- entry point this package installs.
+installHeadroom :: IO ()
+installHeadroom =
+  which "headroom"
+    >>= \case
+      Just loc -> echoWhichLocation loc "headroom already installed at " "headroom already installed."
+      Nothing ->
+        shells
+          "pipx install \"headroom-ai[proxy,code,html,reports,spreadsheet,otel]\"==0.31.0"
+          empty
+
 -- | Builds the dedicated Python interpreter installAiderCli above installs
 -- aider-chat against, via pyenv (must run after installPyenv, which only
 -- installs the pyenv tool itself, not any Python version through it).
@@ -2919,6 +2943,7 @@ main = do
   installPyenv
   installAiderPython
   installAiderCli
+  installHeadroom
   installOhMyZshPlugins
   installPowerline
   copyDotFilesToHome
