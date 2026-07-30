@@ -2298,6 +2298,55 @@ installHeadroom =
           "pipx install \"headroom-ai[proxy,code,html,reports,spreadsheet,otel]\"==0.31.0"
           empty
 
+-- | Wires headroom's persistent proxy into Codex and OpenCode so requests
+-- actually route through it, rather than just having the headroom binary
+-- installed alongside them with nothing using it. Must run after
+-- installHeadroom/installCodexCli/installOpenCodeCli.
+--
+-- `--scope provider` is required -- confirmed live that the default
+-- `--scope user` only installs the shared systemd --user proxy service and
+-- never touches either tool's config file at all (`headroom doctor` kept
+-- reporting codex as "not routed" and neither config.toml nor
+-- opencode.json changed). `--scope provider` is what actually resolves to
+-- and writes ~/.codex/config.toml and ~/.config/opencode/opencode.json.
+--
+-- Both `--target` flags must be passed in the same invocation -- confirmed
+-- live that `install apply` replaces the full target set for the profile
+-- on every call rather than adding to it, so applying codex and then
+-- opencode as two separate calls silently stripped codex's provider block
+-- back out again when the opencode-only call ran second.
+--
+-- No which/state guard needed: unlike the binary installers above, `install
+-- apply` is designed to be rerun against an existing profile (confirmed
+-- live: it prints "Updating existing deployment profile 'default'..." and
+-- succeeds rather than erroring).
+--
+-- The trailing grep/mv pass fixes a real bug in headroom==0.31.0's own
+-- installer (`headroom/providers/codex/install.py apply_provider_scope`):
+-- it writes its `model_provider = "headroom"` / `openai_base_url = ...`
+-- lines wherever the existing marker block happens to sit (or the file's
+-- absolute end), with no guarantee they land before every `[section]`
+-- header. TOML keys written after a `[table]` header belong to *that*
+-- table, not the root table -- confirmed live: with `[mcp_servers.headroom]`
+-- already earlier in the file, this silently nested `model_provider` inside
+-- `mcp_servers.headroom` instead of the root table, so codex never saw it
+-- and fell back to its built-in `openai` provider with no error at all
+-- (`codex doctor` showed `default model provider: openai`, live websocket
+-- connected straight to `wss://chatgpt.com/backend-api`). Hoisting those two
+-- keys above the first `[` fixed it immediately (`codex doctor` then showed
+-- `default model provider: headroom`, websocket on
+-- `ws://127.0.0.1:8787/v1/...`). Safe to rerun: the grep patterns are
+-- unaffected by where the two keys currently sit.
+applyHeadroomIntegration :: IO ()
+applyHeadroomIntegration =
+  shells
+    "headroom install apply --providers manual --target codex --target opencode --scope provider \
+    \ && tmp=$(mktemp) \
+    \ && grep -E '^(model_provider|openai_base_url) = ' ~/.codex/config.toml > \"$tmp\" \
+    \ && grep -vE '^(model_provider|openai_base_url) = ' ~/.codex/config.toml >> \"$tmp\" \
+    \ && mv \"$tmp\" ~/.codex/config.toml"
+    empty
+
 -- | Builds the dedicated Python interpreter installAiderCli above installs
 -- aider-chat against, via pyenv (must run after installPyenv, which only
 -- installs the pyenv tool itself, not any Python version through it).
@@ -2944,6 +2993,7 @@ main = do
   installAiderPython
   installAiderCli
   installHeadroom
+  applyHeadroomIntegration
   installOhMyZshPlugins
   installPowerline
   copyDotFilesToHome

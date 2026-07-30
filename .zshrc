@@ -154,6 +154,8 @@ alias zshrc='v ~/.zshrc'
 alias lpgp="lpass show --password -c"
 alias screeps-dir=$HOME/.config/Screeps/scripts/screeps.com/tutorial-1
 alias ipyvi="ipython --TerminalInteractiveShell.editing_mode=vi"
+alias claude='headroom wrap claude --'
+alias opencode='headroom wrap opencode --'
 
 export HISTCONTROL=ignoreboth
 
@@ -163,6 +165,12 @@ export FARADAI_CPUS=8
 export FARADAI_PIDS=1024
 export FARADAI_TRUST_SSH_AGENT=1
 export FARADAI_MOUNT_NIX_STORE=1
+export FARADAI_ENABLE_HEADROOM=1
+export FARADAI_ENABLE_PONYTAIL=1
+
+# Dockerized IDEs settings
+export FULLNAME="Josiah Berkebile"
+export EMAIL="praenato14@gmail.com"
 
 . $HOME/miniconda3/etc/profile.d/conda.sh
 eval "$(pyenv init -)"
@@ -232,11 +240,11 @@ export PATH="/home/josiah/.rd/bin:$PATH"
 # isn't actually a live ssh-agent process, so every shell/pane reuses the
 # same agent instead.
 SSH_ENV="$HOME/.ssh/agent-environment"
-[ -f "$SSH_ENV" ] && . "$SSH_ENV" > /dev/null
+[ -f "$SSH_ENV" ] && . "$SSH_ENV" >/dev/null
 if [ -z "$SSH_AGENT_PID" ] || ! ps -p "$SSH_AGENT_PID" -o comm= 2>/dev/null | grep -q '^ssh-agent$'; then
-  ssh-agent -s | sed '/^echo /d' > "$SSH_ENV"
+  ssh-agent -s | sed '/^echo /d' >"$SSH_ENV"
   chmod 600 "$SSH_ENV"
-  . "$SSH_ENV" > /dev/null
+  . "$SSH_ENV" >/dev/null
 fi
 
 [ -f "/home/josiah/.ghcup/env" ] && . "/home/josiah/.ghcup/env" # ghcup-env
