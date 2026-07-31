@@ -2347,6 +2347,37 @@ applyHeadroomIntegration =
     \ && mv \"$tmp\" ~/.codex/config.toml"
     empty
 
+-- | applyHeadroomIntegration's `--target opencode` only wires headroom's
+-- always-on native-provider baseURL override (anthropic/openai providers
+-- only) -- confirmed that override is baked into the `headroom-ai` PyPI
+-- wheel itself. Routing every other provider (DeepSeek/Zen, Gemini,
+-- Copilot, custom gateways) needs headroom's separate transparent
+-- transport plugin (plugins/opencode/ in its git repo), which patches
+-- fetch/http globally -- confirmed NOT part of the PyPI wheel at all
+-- (headroom_opencode_plugin_path() resolves to Nothing under a plain pipx
+-- install), so it has to be cloned and built from source. .zshrc's
+-- HEADROOM_OPENCODE_PLUGIN_PATH export (read by that same
+-- headroom_opencode_plugin_path() lookup) is what points headroom at the
+-- built dist/entry.opencode.js below. Must run after installHeadroom (npm
+-- already provisioned earlier in main, via the nodejs24-npm-bin dnfInstall
+-- above).
+installHeadroomOpencodePlugin :: IO ()
+installHeadroomOpencodePlugin = do
+  srcDir <- fmap (</> ".local/share/headroom-src") home
+  srcCloned <- testpath srcDir
+  if srcCloned
+    then echo "headroom source (for its opencode transport plugin) already cloned."
+    else shells ("git clone https://github.com/chopratejas/headroom " <> format fp srcDir) empty
+  pluginJs <- fmap (</> ".local/share/headroom-src/plugins/opencode/dist/entry.opencode.js") home
+  pluginBuilt <- testfile pluginJs
+  if pluginBuilt
+    then echo "headroom opencode transport plugin already built."
+    else do
+      shells
+        ("cd " <> format fp srcDir <> "/plugins/opencode && npm install && npm run build")
+        empty
+      echo "Built headroom's opencode transport plugin."
+
 -- | Builds the dedicated Python interpreter installAiderCli above installs
 -- aider-chat against, via pyenv (must run after installPyenv, which only
 -- installs the pyenv tool itself, not any Python version through it).
@@ -2994,6 +3025,7 @@ main = do
   installAiderCli
   installHeadroom
   applyHeadroomIntegration
+  installHeadroomOpencodePlugin
   installOhMyZshPlugins
   installPowerline
   copyDotFilesToHome

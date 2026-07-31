@@ -155,9 +155,17 @@ alias lpgp="lpass show --password -c"
 alias screeps-dir=$HOME/.config/Screeps/scripts/screeps.com/tutorial-1
 alias ipyvi="ipython --TerminalInteractiveShell.editing_mode=vi"
 alias claude='headroom wrap claude --'
+alias codex='headroom wrap codex --'
 alias opencode='headroom wrap opencode --'
 
+# Routes ALL opencode provider traffic (not just anthropic/openai) through
+# headroom's transport plugin -- see /home/josiah/.local/share/headroom-src/plugins/opencode
+export HEADROOM_OPENCODE_PLUGIN_PATH="$HOME/.local/share/headroom-src/plugins/opencode/dist/entry.opencode.js"
+
 export HISTCONTROL=ignoreboth
+
+# Local AI agent settings
+export HEADROOM_MODE=token
 
 # FaradAI settings
 export FARADAI_MEMORY=16g
