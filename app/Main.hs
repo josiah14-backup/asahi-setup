@@ -1911,6 +1911,54 @@ writeCameraToggleSudoers = do
       shells ("rm " <> format fp tmpPath) empty
       echo "Installed a scoped NOPASSWD sudoers rule (modprobe/rmmod apple_isp only) for the waybar camera-toggle button."
 
+-- | The internal Force Touch trackpad's capacitive layer asserts a full
+-- touch (BTN_TOUCH=1, real TRACKING_ID) from mere proximity -- confirmed
+-- via evtest, events fire from roughly half an inch above the glass,
+-- for a finger or a hovering palm alike. libinput's own palm-size
+-- classifier (50-system-apple.quirks ships AttrPalmSizeThreshold=1600
+-- for this exact device already) can't help here since it only judges
+-- touch *shape*, not whether real contact happened at all. Pressure is
+-- the one axis that's physically incapable of lying: the Force Touch
+-- glass doesn't click, force comes from a strain sensor mechanically
+-- separate from the capacitive layer, so a hovering object can't drive
+-- it above zero -- confirmed across multiple evtest samples (hover:
+-- always flat 0; real contact, deliberate or just a resting palm:
+-- ramps up within ~15-30ms). AttrPressureRange=5:2 requires that ramp
+-- before libinput accepts the touch as real, closing the hover bug
+-- without touching the already-tuned palm-size threshold.
+writeTrackpadHoverQuirks :: IO ()
+writeTrackpadHoverQuirks = do
+  let quirksPath = "/etc/libinput/local-overrides.quirks" :: Turtle.FilePath
+      quirksDir = "/etc/libinput" :: Turtle.FilePath
+      tmpPath = "/tmp/asahi-trackpad-hover.quirks" :: Turtle.FilePath
+      quirks =
+        "[Apple Laptop Touchpad (MTP) - hover fix]\n\
+        \MatchUdevType=touchpad\n\
+        \MatchName=Apple*MTP*\n\
+        \MatchVendor=0x05AC\n\
+        \AttrPressureRange=5:2\n"
+  -- same testfile-lies-about-root-owned-paths trap as the sudoers rule
+  -- above -- `sudo test -f` is the only check that reflects reality.
+  alreadyExists <-
+    shell ("sudo test -f " <> format fp quirksPath) empty
+      >>= \case
+        ExitSuccess -> return True
+        ExitFailure _ -> return False
+  if alreadyExists
+    then echo "/etc/libinput/local-overrides.quirks already present, leaving it untouched."
+    else do
+      shells ("sudo mkdir -p " <> format fp quirksDir) empty
+      writeTextFile tmpPath quirks
+      shells
+        ( "sudo install -m 0644 -o root -g root "
+            <> format fp tmpPath
+            <> " "
+            <> format fp quirksPath
+        )
+        empty
+      shells ("rm " <> format fp tmpPath) empty
+      echo "Installed /etc/libinput/local-overrides.quirks (AttrPressureRange=5:2) -- fixes the trackpad registering touches from proximity before real contact. Requires a reboot to take effect."
+
 -- | Fedora's own `emacs` package already builds with
 -- --with-native-compilation=aot (confirmed by reading emacs.spec out of
 -- the fc44 SRPM), so a plain dnf install doesn't actually get you
@@ -3100,6 +3148,7 @@ main = do
   installHyprland
   writeWaybarConfig
   writeCameraToggleSudoers
+  writeTrackpadHoverQuirks
   installTailscale
   installHyprlockAndHypridle
   writeHyprlockConfig
