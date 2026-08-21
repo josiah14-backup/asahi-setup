@@ -1723,22 +1723,39 @@ writeHyprpaperConfig = do
       echo "Wrote ~/.config/hypr/hyprpaper.conf."
 
 -- | Hyprland has no Fedora repo package at all (a licensing/policy gap
--- historically, not a technical one), so this uses solopasha/hyprland,
--- a COPR verified to (a) actually exist, (b) explicitly support
--- fedora-44-aarch64 (this exact system), and (c) have recent successful
--- builds for it -- checked directly against the COPR API rather than
--- trusted from a search result, after an earlier plausible-sounding COPR
--- name turned out not to exist at all.
+-- historically, not a technical one), so this uses mineiro/hyprland,
+-- a COPR verified to (a) actually exist, (b) publish real, non-empty
+-- fedora-44-aarch64 builds (1359 packages in that chroot's repodata,
+-- checked directly), and (c) have a recent successful build for it --
+-- checked against the COPR API, not trusted from a search result.
 --
--- As of this writing, that COPR's aquamarine 0.9.5-2 build requires
+-- Previously used solopasha/hyprland, which is where the currently
+-- documented aquamarine/libdisplay-info notes below came from. As of
+-- 2026-08-21, solopasha's project-level chroot list only publishes
+-- fedora-rawhide-x86_64 -- fedora-44-aarch64 404s live -- so it's dead
+-- for this system. mineiro/hyprland is the replacement, chosen after
+-- checking several other "hyprland" COPRs returned by the project
+-- search API for ones with a non-empty aarch64 chroot and full package
+-- coverage (nikromen/hyprland is also live for fedora-44-aarch64 but
+-- doesn't build the Qt/GUI helper package at all).
+--
+-- hyprland-qtutils was renamed upstream to hyprland-guiutils (still
+-- github.com/hyprwm/hyprland-guiutils, same "GUI utility applications"
+-- role) somewhere between the 0.51.1 this system currently has and the
+-- 0.56.2 mineiro currently builds -- confirmed via that package's repo
+-- URL in mineiro's primary.xml, not guessed.
+--
+-- As of this writing, solopasha's aquamarine 0.9.5-2 build required
 -- libdisplay-info.so.2, but Fedora's own libdisplay-info-0.3.0 now
--- provides libdisplay-info.so.3 -- a build-environment mismatch (the
+-- provides libdisplay-info.so.3 -- a build-environment mismatch (that
 -- COPR was built against an older libdisplay-info than Fedora currently
 -- ships), not a real API incompatibility: confirmed by rebuilding the
 -- exact same upstream aquamarine source locally against this system's
 -- actual libdisplay-info headers, which links fine and correctly
 -- requires .so.3. If the plain install hits this, rebuildAquamarine
 -- below does exactly that rebuild-and-retry rather than giving up.
+-- Not independently reconfirmed against mineiro's build; the fallback
+-- is harmless to keep regardless since it only triggers on failure.
 --
 -- hyprland.conf (this repo's hypr/hyprland.conf) maps josiah's actual
 -- xmonad.hs as closely as Hyprland's dispatchers allow; see that file's
@@ -1763,14 +1780,14 @@ installHyprland =
           "Hyprland already installed at "
           "Hyprland already installed."
       Nothing -> do
-        shells "sudo dnf copr enable -y solopasha/hyprland" empty
-        -- hyprland-qtutils provides Qt-based helper dialogs Hyprland
-        -- itself uses (e.g. its own update-available notification).
-        -- Without it, Hyprland shows a startup toast warning it's
-        -- missing (confirmed directly: seen on this machine before this
-        -- was added) -- harmless, but the warning's easy to mistake for
-        -- something more serious.
-        shell "sudo dnf install -y hyprland xdg-desktop-portal-hyprland hyprland-qtutils" empty
+        shells "sudo dnf copr enable -y mineiro/hyprland" empty
+        -- hyprland-guiutils (formerly hyprland-qtutils) provides Qt-based
+        -- helper dialogs Hyprland itself uses (e.g. its own
+        -- update-available notification). Without it, Hyprland shows a
+        -- startup toast warning it's missing (confirmed directly: seen
+        -- on this machine before this was added) -- harmless, but the
+        -- warning's easy to mistake for something more serious.
+        shell "sudo dnf install -y hyprland xdg-desktop-portal-hyprland hyprland-guiutils" empty
           >>= \case
             ExitSuccess -> return ()
             ExitFailure _ -> rebuildAquamarineThenInstallHyprland
@@ -1794,7 +1811,7 @@ rebuildAquamarineThenInstallHyprland = do
     "rm -rf aquamarine-rebuild && mkdir aquamarine-rebuild \
     \&& cd aquamarine-rebuild \
     \&& dnf download --source aquamarine \
-    \--repo=copr:copr.fedorainfracloud.org:solopasha:hyprland \
+    \--repo=copr:copr.fedorainfracloud.org:mineiro:hyprland \
     \&& rpmbuild --rebuild ./*.src.rpm \
     \&& cd .. && rm -rf aquamarine-rebuild"
     empty
@@ -1802,7 +1819,7 @@ rebuildAquamarineThenInstallHyprland = do
     "sudo dnf install -y \
     \$HOME/rpmbuild/RPMS/aarch64/aquamarine-[0-9]*.rpm \
     \$HOME/rpmbuild/RPMS/aarch64/aquamarine-devel-[0-9]*.rpm \
-    \hyprland xdg-desktop-portal-hyprland hyprland-qtutils"
+    \hyprland xdg-desktop-portal-hyprland hyprland-guiutils"
     empty
 
 writeHyprlandConfig :: IO ()
