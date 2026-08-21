@@ -2671,6 +2671,16 @@ main = do
     "gdisk already installed at "
     "gdisk already installed."
   dnfInstall
+    "gdb"
+    "gdb"
+    "gdb already installed at "
+    "gdb already installed."
+  dnfInstall
+    "lldb"
+    "lldb"
+    "lldb already installed at "
+    "lldb already installed."
+  dnfInstall
     "file"
     "file"
     "file already installed at "
