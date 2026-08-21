@@ -42,7 +42,7 @@
 set -euo pipefail
 
 STATE_FILE="$HOME/.cache/hypr-layout-cycle-step"
-CONFIG_FILE="$HOME/.config/hypr/hyprland.conf"
+CONFIG_FILE="$HOME/.config/hypr/hyprland.lua"
 STATES=(left top right bottom center dwindle)
 
 current=0
@@ -80,8 +80,8 @@ current_is_dwindle=0
 # `hyprctl reload` re-reads the file and runs that path for real).
 switch_layout() {
   local from="$1" to="$2"
-  sed -i "s/^\([[:space:]]*layout = \)${from}\$/\1${to}/" "$CONFIG_FILE"
-  if ! grep -qE "^[[:space:]]*layout = ${to}\$" "$CONFIG_FILE"; then
+  sed -i "s/^\([[:space:]]*layout = \)\"${from}\",\$/\1\"${to}\",/" "$CONFIG_FILE"
+  if ! grep -qE "^[[:space:]]*layout = \"${to}\",\$" "$CONFIG_FILE"; then
     echo "set-layout: failed to rewrite general:layout ${from} -> ${to} in ${CONFIG_FILE}" >&2
     exit 1
   fi

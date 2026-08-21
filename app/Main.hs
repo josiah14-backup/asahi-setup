@@ -624,7 +624,7 @@ installPowerline =
 -- the same way at the shell. Unlike upstream, .xmonad isn't carried over
 -- here -- Hyprland (below, via installHyprland) fills that "alternate
 -- tiling WM" role instead, configured to match xmonad.hs as closely as
--- its dispatchers allow (see hypr/hyprland.conf). vivarium, the
+-- its dispatchers allow (see hypr/hyprland.lua). vivarium, the
 -- original candidate, turned out to be abandoned upstream since 2023
 -- and doesn't build against current wlroots/GCC; river is installed
 -- separately, purely as a curiosity for future custom-WM work against
@@ -992,7 +992,7 @@ installSpotifyConnectReceiver = do
 -- system (confirmed directly) -- fuzzel and any other XDG-compliant
 -- launcher only lists apps that have one, so it could never show up
 -- there regardless of whether the binary itself was installed
--- correctly. Launches into Konsole, same pattern as hyprland.conf's own
+-- correctly. Launches into Konsole, same pattern as hyprland.lua's own
 -- `konsole -e tmux attach` binding. Icon is utilities-terminal rather
 -- than a "spotify"-named icon: Papirus-Dark inherits from
 -- breeze-dark/hicolor, not from the base Papirus theme that actually
@@ -1030,7 +1030,7 @@ writeVifmDesktopFile = do
       "Wrote ~/.local/share/applications/vifm.desktop so vifm shows up in the launcher."
   return ()
 
--- | foot is now the default terminal (hypr/hyprland.conf's mod-shift-Return
+-- | foot is now the default terminal (hypr/hyprland.lua's mod-shift-Return
 -- and mod-e bindings), by request -- Solarized Dark to match, using the
 -- same standard 16-ANSI-color mapping as konsole/SolarizedDark.colorscheme.
 -- foot's own default foreground/background (839496/002b36) already happen
@@ -1277,7 +1277,7 @@ writeKxkbrcKeyRemaps = do
 -- and neither `hyprctl`-style live reload nor `qdbus
 -- org.kde.KWin.reconfigure` picked up a change here -- only an actual
 -- logout/login did, same as the dvorak kb_layout issue in
--- hypr/hyprland.conf). Appends the remaps to whatever X11 Options
+-- hypr/hyprland.lua). Appends the remaps to whatever X11 Options
 -- localectl already reports rather than overwriting them outright, so
 -- this doesn't clobber the existing terminate:ctrl_alt_bksp (or whatever
 -- else may be set) on a fresh machine's own defaults.
@@ -1335,7 +1335,7 @@ writePlasmaFont = do
 -- | qt6ct is what gives Qt/KDE apps (Dolphin, etc.) a themed palette
 -- under Hyprland, where there's no Plasma shell to set one automatically
 -- the way there is under a real Plasma session -- QT_QPA_PLATFORMTHEME
--- (set in hypr/hyprland.conf's env block) is what tells Qt apps to ask
+-- (set in hypr/hyprland.lua) is what tells Qt apps to ask
 -- qt6ct at all. color_scheme_path points at the same .colors file
 -- writePlasmaColorScheme deploys, since qt6ct can load KDE's own color
 -- scheme format directly -- no need for a second, qt6ct-specific palette.
@@ -1386,7 +1386,7 @@ writeQt6ctConfig = do
       echo "Wrote ~/.config/qt6ct/qt6ct.conf (Solarized Dark, via the same SolarizedDark.colors file Plasma uses)."
 
 -- | Breeze's default folder icons are blue, which clashes visually next
--- to Solarized's own orange accent used everywhere else (hyprland.conf
+-- to Solarized's own orange accent used everywhere else (hyprland.lua
 -- borders, waybar, fuzzel). papirus-icon-theme-dark is a pure data/icon
 -- package with no binary of its own, so this calls dnf directly rather
 -- than force-fitting the dnfInstall helper's which-based "is it already
@@ -1438,7 +1438,7 @@ applyPapirusDarkOrangeTheme = do
 -- directly: nothing under /usr/share, and konsole's own rpm file list
 -- has no *.colorscheme or *.profile entries at all), so there's nothing
 -- pre-existing here to clobber. Uses the same Solarized Dark palette as
--- plasma/SolarizedDark.colors/waybar/fuzzel/hyprland.conf, mapped onto
+-- plasma/SolarizedDark.colors/waybar/fuzzel/hyprland.lua, mapped onto
 -- the standard 16-ANSI-color Solarized terminal convention (see that
 -- .colorscheme file's own header comment for the exact mapping).
 writeKonsoleSolarizedTheme :: IO ()
@@ -1611,7 +1611,7 @@ writeFuzzelConfig = do
   return ()
 
 -- | Same solopasha/hyprland COPR as installHyprland below -- these close
--- a gap hyprland.conf used to document explicitly ("mod-shift-l screen
+-- a gap hyprland.lua used to document explicitly ("mod-shift-l screen
 -- lock (no lock daemon set up for this session)"): `loginctl
 -- lock-session` existed as a command, but nothing was listening for the
 -- Lock signal, so it was a silent no-op. hyprlock (the lock screen) and
@@ -1631,7 +1631,7 @@ installHyprlockAndHypridle = do
     "hypridle already installed."
 
 -- | Both hyprlock and hypridle read from ~/.config/hypr/ directly (the
--- same directory hyprland.conf itself lives in), not their own
+-- same directory hyprland.lua itself lives in), not their own
 -- subdirectories.
 writeHyprlockConfig :: IO ()
 writeHyprlockConfig = do
@@ -1757,7 +1757,7 @@ writeHyprpaperConfig = do
 -- Not independently reconfirmed against mineiro's build; the fallback
 -- is harmless to keep regardless since it only triggers on failure.
 --
--- hyprland.conf (this repo's hypr/hyprland.conf) maps josiah's actual
+-- hyprland.lua (this repo's hypr/hyprland.lua) maps josiah's actual
 -- xmonad.hs as closely as Hyprland's dispatchers allow; see that file's
 -- own header comment for what maps cleanly and what's a known,
 -- accepted gap (no Xinerama-style workspace swapping between monitors).
@@ -1779,6 +1779,7 @@ installHyprland =
           hyprlandLoc
           "Hyprland already installed at "
           "Hyprland already installed."
+          >> writeHyprlandConfig
       Nothing -> do
         shells "sudo dnf copr enable -y mineiro/hyprland" empty
         -- hyprland-guiutils (formerly hyprland-qtutils) provides Qt-based
@@ -1827,26 +1828,33 @@ writeHyprlandConfig = do
   curdir <- pwd
   homeDir <- home
   let configDir = homeDir </> ".config/hypr"
-      configPath = configDir </> "hyprland.conf"
+      configPath = configDir </> "hyprland.lua"
+      legacyPath = configDir </> "hyprland.conf"
+      legacyBackupPath = configDir </> "hyprland.conf.pre-lua"
       scriptsDir = configDir </> "scripts"
   alreadyExists <- testfile configPath
-  -- Hyprland itself autogenerates a stock hyprland.conf (marked with its
-  -- own "autogenerated = 1" line) the moment the package is installed --
+  -- Hyprland itself autogenerates a stock hyprland.lua (marked as
+  -- autogenerated) the moment the package is installed --
   -- before this function ever runs -- so "the file exists" can't be used
   -- to mean "josiah customized it". Only that marker means stock/safe to
   -- overwrite; anything else existing is treated as a real customization.
   isStockAutogenerated <-
     if not alreadyExists
       then return False
-      else isInfixOf (pack "autogenerated = 1") <$> strict (input configPath)
+      else isInfixOf (pack "autogenerated = true") <$> strict (input configPath)
   if alreadyExists && not isStockAutogenerated
-    then echo "~/.config/hypr/hyprland.conf already present and customized, leaving it untouched."
+    then echo "~/.config/hypr/hyprland.lua already present and customized, leaving it untouched."
     else do
       mktree configDir
-      cp (curdir </> "hypr/hyprland.conf") configPath
-      echo "Wrote ~/.config/hypr/hyprland.conf (master layout, xmonad-mapped keybinds, waybar, fuzzel launcher)."
-  -- Deployed unconditionally, unlike hyprland.conf above: mod-Return and
-  -- mod-? in this repo's hyprland.conf call these scripts directly
+      legacyExists <- testfile legacyPath
+      legacyBackupExists <- testfile legacyBackupPath
+      when (legacyExists && not legacyBackupExists) $ do
+        cp legacyPath legacyBackupPath
+        echo "Backed up deprecated hyprland.conf as hyprland.conf.pre-lua."
+      cp (curdir </> "hypr/hyprland.lua") configPath
+      echo "Wrote ~/.config/hypr/hyprland.lua (master layout, xmonad-mapped keybinds, waybar, fuzzel launcher)."
+  -- Deployed unconditionally, unlike hyprland.lua above: its bindings
+  -- call these scripts directly
   -- regardless of whether the config file itself was left untouched, so
   -- they need to exist either way. Copies every script in
   -- hypr/scripts/ via a plain shell glob rather than naming each one,
@@ -3166,7 +3174,7 @@ main = do
   installK3d
   installTerraform
   -- waybar and brightnessctl for the Hyprland session below
-  -- (brightnessctl specifically because hypr/hyprland.conf's brightness
+  -- (brightnessctl specifically because hypr/hyprland.lua's brightness
   -- keys need it -- xmonad.hs's `xbacklight` doesn't work under a
   -- native Wayland compositor).
   shells "sudo dnf install -y waybar brightnessctl" empty

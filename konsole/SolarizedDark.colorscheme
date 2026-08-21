@@ -3,7 +3,7 @@
 # blue/magenta/cyan/base2; intense/bold colors 0-7 =
 # base03/orange/base01/base00/base0/violet/base1/base3), same palette
 # as the rest of this repo's Solarized Dark theming
-# (plasma/SolarizedDark.colors, waybar, fuzzel, hyprland.conf borders).
+# (plasma/SolarizedDark.colors, waybar, fuzzel, hyprland.lua borders).
 
 [Background]
 Color=0,43,54

@@ -49,7 +49,7 @@ doing anything.
   Plasma one: installed via the `solopasha/hyprland` COPR (with a
   same-machine aquamarine rebuild fallback if the prebuilt package's
   `libdisplay-info` soname doesn't match Fedora's), configured via
-  `hypr/hyprland.conf` — a deliberate, keybind-by-keybind mapping of my
+  `hypr/hyprland.lua` — a deliberate, keybind-by-keybind mapping of my
   actual `pop-os-setup/.xmonad/xmonad.hs` onto Hyprland's dispatchers
   (master layout, not dwindle), with the gaps documented inline where
   Hyprland has no real equivalent (no Xinerama-style workspace swap
@@ -95,7 +95,7 @@ steps, documented at the top of `app/Main.hs`:
 app/Main.hs          the entire installer/configurator
 setup.sh             bare-metal bootstrap (GHCup + build deps only)
 .zshrc, .bashrc, .tmux.conf, .gitconfig, ...   dotfiles, deployed verbatim
-hypr/hyprland.conf   Hyprland config (xmonad-mapped keybinds)
+hypr/hyprland.lua    Hyprland config (xmonad-mapped keybinds)
 waybar/              Waybar config + stylesheet
 plasma/kxkbrc        KDE keyboard-remap config
 emacs/init.el        Emacs config, deployed to ~/.config/emacs/
