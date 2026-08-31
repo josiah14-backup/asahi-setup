@@ -2363,13 +2363,9 @@ installAiderCli =
 -- entry point this package installs.
 installHeadroom :: IO ()
 installHeadroom =
-  which "headroom"
-    >>= \case
-      Just loc -> echoWhichLocation loc "headroom already installed at " "headroom already installed."
-      Nothing ->
-        shells
-          "pipx install \"headroom-ai[proxy,code,html,reports,spreadsheet,otel]\"==0.31.0"
-          empty
+  shells
+    "pipx install --force \"headroom-ai[proxy,code,html,reports,spreadsheet,otel]\"==0.37.0"
+    empty
 
 -- | Wires headroom's persistent proxy into Codex and OpenCode so requests
 -- actually route through it, rather than just having the headroom binary
@@ -2394,30 +2390,10 @@ installHeadroom =
 -- live: it prints "Updating existing deployment profile 'default'..." and
 -- succeeds rather than erroring).
 --
--- The trailing grep/mv pass fixes a real bug in headroom==0.31.0's own
--- installer (`headroom/providers/codex/install.py apply_provider_scope`):
--- it writes its `model_provider = "headroom"` / `openai_base_url = ...`
--- lines wherever the existing marker block happens to sit (or the file's
--- absolute end), with no guarantee they land before every `[section]`
--- header. TOML keys written after a `[table]` header belong to *that*
--- table, not the root table -- confirmed live: with `[mcp_servers.headroom]`
--- already earlier in the file, this silently nested `model_provider` inside
--- `mcp_servers.headroom` instead of the root table, so codex never saw it
--- and fell back to its built-in `openai` provider with no error at all
--- (`codex doctor` showed `default model provider: openai`, live websocket
--- connected straight to `wss://chatgpt.com/backend-api`). Hoisting those two
--- keys above the first `[` fixed it immediately (`codex doctor` then showed
--- `default model provider: headroom`, websocket on
--- `ws://127.0.0.1:8787/v1/...`). Safe to rerun: the grep patterns are
--- unaffected by where the two keys currently sit.
 applyHeadroomIntegration :: IO ()
 applyHeadroomIntegration =
   shells
-    "headroom install apply --providers manual --target codex --target opencode --scope provider \
-    \ && tmp=$(mktemp) \
-    \ && grep -E '^(model_provider|openai_base_url) = ' ~/.codex/config.toml > \"$tmp\" \
-    \ && grep -vE '^(model_provider|openai_base_url) = ' ~/.codex/config.toml >> \"$tmp\" \
-    \ && mv \"$tmp\" ~/.codex/config.toml"
+    "headroom install apply --providers manual --target codex --target opencode --scope provider"
     empty
 
 -- | applyHeadroomIntegration's `--target opencode` only wires headroom's
@@ -2439,17 +2415,23 @@ installHeadroomOpencodePlugin = do
   srcDir <- fmap (</> ".local/share/headroom-src") home
   srcCloned <- testpath srcDir
   if srcCloned
-    then echo "headroom source (for its opencode transport plugin) already cloned."
-    else shells ("git clone https://github.com/chopratejas/headroom " <> format fp srcDir) empty
-  pluginJs <- fmap (</> ".local/share/headroom-src/plugins/opencode/dist/entry.opencode.js") home
-  pluginBuilt <- testfile pluginJs
-  if pluginBuilt
-    then echo "headroom opencode transport plugin already built."
-    else do
-      shells
-        ("cd " <> format fp srcDir <> "/plugins/opencode && npm install && npm run build")
-        empty
-      echo "Built headroom's opencode transport plugin."
+    then shells ("git -C " <> format fp srcDir <> " fetch --depth 1 origin tag v0.37.0 && git -C " <> format fp srcDir <> " checkout --detach FETCH_HEAD") empty
+    else shells ("git clone --branch v0.37.0 --depth 1 https://github.com/chopratejas/headroom " <> format fp srcDir) empty
+  shells
+    ("cd " <> format fp srcDir <> "/plugins/opencode && npm install && npm run build")
+    empty
+
+installPonytailOpenCode :: IO ()
+installPonytailOpenCode =
+  shells
+    "mkdir -p ~/.config/opencode \
+    \ && cfg=~/.config/opencode/opencode.json \
+    \ && if [ -f \"$cfg\" ]; then \
+    \ tmp=$(mktemp); \
+    \ jq '.plugin = ((.plugin // []) | if index(\"@dietrichgebert/ponytail\") then . else . + [\"@dietrichgebert/ponytail\"] end)' \"$cfg\" > \"$tmp\" \
+    \ && mv \"$tmp\" \"$cfg\"; \
+    \ else printf '%s\n' '{\"$schema\":\"https://opencode.ai/config.json\",\"plugin\":[\"@dietrichgebert/ponytail\"]}' > \"$cfg\"; fi"
+    empty
 
 -- | Builds the dedicated Python interpreter installAiderCli above installs
 -- aider-chat against, via pyenv (must run after installPyenv, which only
@@ -3112,6 +3094,7 @@ main = do
   installOhMyZshPlugins
   installPowerline
   copyDotFilesToHome
+  installPonytailOpenCode
   -- tpm's install_plugins script reads the @plugin lines out of the
   -- deployed ~/.tmux.conf, so this has to run after copyDotFilesToHome,
   -- not before.
