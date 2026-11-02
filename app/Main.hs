@@ -650,6 +650,17 @@ copyDotFilesToHome = do
   mktree (homedir </> ".config/tmux-powerline")
   cp (curdir </> "tmux-powerline/config.sh") (homedir </> ".config/tmux-powerline/config.sh")
 
+-- | Unlike user-edited config files, the updater is replaced on every run so
+-- fixes in this repository reach the installed copy.
+installUpdateScript :: IO ()
+installUpdateScript = do
+  homeDir <- home
+  curdir <- pwd
+  let destination = homeDir </> "update-asahi-tools.elv"
+  cp (curdir </> "update-asahi-tools.elv") destination
+  _ <- chmod executable destination
+  echo "Installed executable updater at ~/update-asahi-tools.elv."
+
 -- | Firefox, Elisa, Kamoso, and NeoChat are each installed twice on this
 -- machine -- once as a system package, once via the flatpakInstall list
 -- below, both inherited independently from pop-os-setup rather than a
@@ -3094,6 +3105,7 @@ main = do
   installOhMyZshPlugins
   installPowerline
   copyDotFilesToHome
+  installUpdateScript
   installPonytailOpenCode
   -- tpm's install_plugins script reads the @plugin lines out of the
   -- deployed ~/.tmux.conf, so this has to run after copyDotFilesToHome,

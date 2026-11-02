@@ -18,6 +18,7 @@ build-type:     Simple
 extra-source-files:
     README.md
     ChangeLog.md
+    update-asahi-tools.elv
 
 source-repository head
   type: git

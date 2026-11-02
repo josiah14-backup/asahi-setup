@@ -9,6 +9,7 @@ copyright:           "2026 Cloyd Garrett 'Josiah' Berkebile"
 extra-source-files:
 - README.md
 - ChangeLog.md
+- update-asahi-tools.elv
 
 description:         Please see the README on GitHub at <https://github.com/githubuser/asahi-setup#readme>
 

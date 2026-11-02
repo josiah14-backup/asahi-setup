@@ -94,6 +94,7 @@ steps, documented at the top of `app/Main.hs`:
 ```
 app/Main.hs          the entire installer/configurator
 setup.sh             bare-metal bootstrap (GHCup + build deps only)
+update-asahi-tools.elv  non-dnf/Flatpak updater, installed executable to ~/
 .zshrc, .bashrc, .tmux.conf, .gitconfig, ...   dotfiles, deployed verbatim
 hypr/hyprland.lua    Hyprland config (xmonad-mapped keybinds)
 waybar/              Waybar config + stylesheet
