@@ -419,7 +419,7 @@ installJuliaup =
 -- `guix --version` and `guile --version` after this actually runs on a
 -- new machine before trusting it fully.
 installGuix :: IO ()
-installGuix =
+installGuix = do
   which "guix"
     >>= \case
       Just guixLoc ->
@@ -474,6 +474,13 @@ installGuix =
             )
             empty
           >> echo "Guix installed (from the official binary tarball, no interactive prompts); guix-daemon enabled."
+  -- Guix's daemon-owned completion target fails zsh's compaudit; .zshrc loads it directly.
+  shell
+    "if [ -L /usr/share/zsh/site-functions/_guix ]; then sudo unlink /usr/share/zsh/site-functions/_guix; fi; [ ! -L /usr/share/zsh/site-functions/_guix ]"
+    empty
+    >>= \case
+      ExitSuccess -> return ()
+      ExitFailure _ -> die "ERROR: Could not remove the global Guix completion symlink"
 
 installOhMyZsh :: IO ()
 installOhMyZsh =

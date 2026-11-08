@@ -195,17 +195,9 @@ if [ -e $HOME/.guix-profile/etc/profile ]; then
   unset GUIX_PROFILE
 fi
 
-# oh-my-zsh's compinit runs with -i (ignore insecure directories) by default --
-# confirmed directly against lib/compfix.zsh/oh-my-zsh.sh: this already
-# silently skips loading completions only from flagged paths, leaving
-# everything else intact; the printed warning changes nothing on its own.
-# /usr/share/zsh/site-functions/_guix (a symlink into Guix's own profile,
-# owned by the guix-daemon system account -- not root, not this user, which
-# is exactly what the check flags, regardless of permission bits) gets
-# skipped as a result. Loading it manually here, after compinit has already
-# run, sidesteps that one audit gate entirely -- confirmed live -- without
-# touching ZSH_DISABLE_COMPFIX, which would trade this one skipped file for
-# loading *every* insecure completion unconditionally instead.
+# Guix's global completion symlink fails compaudit because its store target is
+# daemon-owned; installGuix removes it. Load that completion after compinit so
+# Oh My Zsh's security audit remains enabled for every other completion.
 if [ -e /var/guix/profiles/per-user/root/current-guix/share/zsh/site-functions/_guix ]; then
   fpath+=(/var/guix/profiles/per-user/root/current-guix/share/zsh/site-functions)
   autoload -Uz _guix
